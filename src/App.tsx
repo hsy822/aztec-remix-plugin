@@ -1,0 +1,32 @@
+import React, { useState, useEffect } from 'react';
+import { Container } from "react-bootstrap";
+import { Main } from './components/main';
+import type { Api } from '@remixproject/plugin-utils';
+import { createClient } from '@remixproject/plugin-iframe';
+import type { IRemixApi } from '@remixproject/plugin-api';
+import type { Client } from '@remixproject/plugin';
+
+function App() {
+  const [client, setClient] = useState<Client<Api, Readonly<IRemixApi>> | undefined | null>(null);
+  const [connection, setConnection] = useState<boolean>(false);
+
+  useEffect(() => {
+    const init = async () => {
+      const temp = createClient();
+      await temp.onload();
+
+      setClient(temp);
+      setConnection(true);
+    };
+    if (!connection) init();
+    console.debug(`%cẅël̈l̈c̈öm̈ë-̈ẗö-̈äz̈ẗëc̈-̈p̈l̈üg̈ïn̈!̈`, 'color:yellow');
+  }, []);
+
+  return (
+    <div className="App">
+      <Container>{client && <Main client={client} />}</Container>
+    </div>
+  );
+}
+
+export default App;
