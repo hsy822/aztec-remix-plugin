@@ -95,6 +95,8 @@ export const AztecContext = createContext<{
   setCurrentTx: (currentTx: ContractFunctionInteractionTx) => void;
   setCurrentContract: (currentContract: Contract) => void;
   setCurrentContractAddress: (currentContractAddress: AztecAddress) => void;
+  selectedAccount: string;
+  setSelectedAccount: (account: string) => void;
 }>({
   pxe: null,
   nodeURL: '',
@@ -120,6 +122,8 @@ export const AztecContext = createContext<{
   setCurrentTx: () => {},
   setCurrentContract: () => {},
   setCurrentContractAddress: () => {},
+  selectedAccount: '',
+  setSelectedAccount: () => {},
 });
 
 export class AztecEnv {

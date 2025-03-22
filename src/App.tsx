@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container } from "react-bootstrap";
-import { Main } from './components/main';
+import { Container } from 'react-bootstrap';
+import { AztecPlugin } from './components/AztecPlugin'; // Main -> AztecPlugin으로 변경
 import type { Api } from '@remixproject/plugin-utils';
 import { createClient } from '@remixproject/plugin-iframe';
 import type { IRemixApi } from '@remixproject/plugin-api';
@@ -14,7 +14,6 @@ function App() {
     const init = async () => {
       const temp = createClient();
       await temp.onload();
-
       setClient(temp);
       setConnection(true);
     };
@@ -24,7 +23,7 @@ function App() {
 
   return (
     <div className="App">
-      <Container>{client && <Main client={client} />}</Container>
+      <Container>{client && <AztecPlugin client={client} />}</Container>
     </div>
   );
 }
