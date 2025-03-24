@@ -32,8 +32,8 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     unconstrained: true,
   });
   const [callParams, setCallParams] = useState<Record<string, Record<string, any>>>({});
-  const [callResult, setCallResult] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const { wallet, currentContract, currentContractAddress, targetProject } = useContext(AztecContext);
 
@@ -101,7 +101,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
         setFunctionAbis(abis);
         setSelectedFunction(null);
         setCallParams({});
-        setCallResult(null);
       } catch (error) {
         console.error('InteractCard - Failed to load function ABIs:', error);
         setFunctionAbis([]);
@@ -115,7 +114,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
       setSelectedFunction(null);
       setCallParams({});
       setCallError(null);
-      setCallResult(null);
     }
   }, [selectedInstance]);
 
@@ -203,7 +201,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
   const handleFunctionChange = (e: React.ChangeEvent<any>) => {
     const fnName = e.target.value;
     setSelectedFunction(fnName);
-    setCallResult(null);
   };
 
   const handleFilterChange = (key: string, value: any) => {
@@ -213,7 +210,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     });
    
     setSelectedFunction(null);
-    setCallResult(null);
   };
 
   const handleParameterChange = (fnName: string, paramName: string, value: any) => {
@@ -234,10 +230,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     setAtAddressError(null);
   };
 
-  const handleCloseCallResult = () => {
-    setCallResult(null);
-  };
-
   const convertParameter = (param: any, value: string) => {
     if (!value) return undefined;
 
@@ -254,15 +246,33 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     return value; 
   };
 
+  const serializeBigInt = (obj: any) => {
+    return JSON.stringify(
+      obj,
+      (key, value) => (typeof value === 'bigint' ? value.toString() : value),
+      2
+    );
+  };
+
   const handleFunctionCall = async (mode: 'simulate' | 'send') => {
     if (!selectedInstance || !selectedFunction || !selectedFunctionAbi) {
       setCallError('Please select a contract instance and function.');
       return;
     }
 
-    setIsLoading(true);
+    const isViewFunction = selectedFunctionAbi.custom_attributes?.includes('view');
+
+    if (mode === 'send' && isViewFunction) {
+      setCallError('View functions cannot be executed with Send. Use Simulate instead.');
+      return;
+    }
+
+    if (mode === 'simulate') {
+      setIsSimulating(true);
+    } else {
+      setIsSending(true);
+    }
     setCallError(null);
-    setCallResult(null);
 
     try {
       const params = selectedFunctionAbi.abi.parameters.map((param: any) => {
@@ -287,18 +297,22 @@ export const InteractCard = ({ client }: InterfaceProps) => {
       if (mode === 'simulate') {
         const result = await method(...params).simulate();
         console.log('InteractCard - Simulate result:', result);
-        setCallResult(`Simulation successful: ${JSON.stringify(result, null, 2)}`);
+        await client.terminal.log({ type: 'info', value: `Simulation successful:\n${serializeBigInt(result)}` });
       } else {
         const tx = await method(...params).send();
         const receipt = await tx.wait();
         console.log('InteractCard - Send result:', receipt);
-        setCallResult(`Transaction successful: ${JSON.stringify(receipt, null, 2)}`);
+        await client.terminal.log({ type: 'info', value: `Transaction successful:\n${serializeBigInt(receipt)}` });
       }
     } catch (error) {
       console.error('InteractCard - Function call error:', error);
       setCallError(`Failed to ${mode} function: ${error.message}`);
     } finally {
-      setIsLoading(false);
+      if (mode === 'simulate') {
+        setIsSimulating(false);
+      } else {
+        setIsSending(false);
+      }
     }
   };
 
@@ -506,33 +520,25 @@ export const InteractCard = ({ client }: InterfaceProps) => {
                         <p>No parameters for this function.</p>
                       )}
                       {/* Simulate and Send Buttons */}
-                      <div className="d-flex gap-2 mt-3">
+                      <div className="d-flex gap-4 mt-3">
                         <Button
                           variant="secondary"
+                          size='sm'
                           onClick={() => handleFunctionCall('simulate')}
-                          disabled={isLoading}
+                          disabled={isSimulating}
                         >
-                          {isLoading ? 'Loading...' : 'Simulate'}
+                          {isSimulating ? 'Loading...' : 'Simulate'}
                         </Button>
                         <Button
                           variant="primary"
+                          size='sm'
                           onClick={() => handleFunctionCall('send')}
-                          disabled={isLoading}
+                          disabled={isSending || selectedFunctionAbi?.custom_attributes?.includes('view')}
                         >
-                          {isLoading ? 'Loading...' : 'Send'}
+                          {isSending ? 'Loading...' : 'Send'}
                         </Button>
                       </div>
                     </div>
-                  )}
-
-                  {/* Call Result */}
-                  {callResult && (
-                    <Alert variant="success" className="mt-2 d-flex justify-content-between align-items-center">
-                      <pre>{callResult}</pre>
-                      <Button variant="link" onClick={handleCloseCallResult} className="p-0">
-                        <X size={20} />
-                      </Button>
-                    </Alert>
                   )}
                 </>
               )}
