@@ -7,8 +7,10 @@ import {
   type PXE,
   type Logger,
   createLogger,
+  createPXEClient,
+  waitForPXE,
 } from '@aztec/aztec.js';
-
+import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
 import { createPXEService, type PXEServiceConfig, getPXEServiceConfig } from '@aztec/pxe/client/lazy';
 import { createStore } from '@aztec/kv-store/indexeddb';
 import { createContext } from 'react';
@@ -80,12 +82,8 @@ export const AztecContext = createContext<{
   currentContractAddress: AztecAddress;
   currentContract: Contract;
   currentTx: ContractFunctionInteractionTx;
-  logs: Log[];
-  logsOpen: boolean;
-  drawerOpen: boolean;
-  setDrawerOpen: (drawerOpen: boolean) => void;
-  setLogsOpen: (logsOpen: boolean) => void;
-  setLogs: (logs: Log[]) => void;
+  targetProject: string | null;
+  setTargetProject: (targetProject: string) => void;
   setWalletDB: (walletDB: WalletDB) => void;
   setPXEInitialized: (isPXEInitialized: boolean) => void;
   setWallet: (wallet: AccountWalletWithSecretKey) => void;
@@ -95,8 +93,6 @@ export const AztecContext = createContext<{
   setCurrentTx: (currentTx: ContractFunctionInteractionTx) => void;
   setCurrentContract: (currentContract: Contract) => void;
   setCurrentContractAddress: (currentContractAddress: AztecAddress) => void;
-  selectedAccount: string;
-  setSelectedAccount: (account: string) => void;
 }>({
   pxe: null,
   nodeURL: '',
@@ -107,12 +103,8 @@ export const AztecContext = createContext<{
   currentContract: null,
   currentContractAddress: null,
   currentTx: null,
-  logs: [],
-  logsOpen: false,
-  drawerOpen: false,
-  setDrawerOpen: () => {},
-  setLogsOpen: () => {},
-  setLogs: () => {},
+  targetProject: null,
+  setTargetProject: () => {},
   setWalletDB: () => {},
   setPXEInitialized: () => {},
   setWallet: () => {},
@@ -122,8 +114,6 @@ export const AztecContext = createContext<{
   setCurrentTx: () => {},
   setCurrentContract: () => {},
   setCurrentContractAddress: () => {},
-  selectedAccount: '',
-  setSelectedAccount: () => {},
 });
 
 export class AztecEnv {
@@ -146,25 +136,38 @@ export class AztecEnv {
     return aztecNode;
   }
 
-  static async initPXE(aztecNode: AztecNode, setLogs: (logs: Log[]) => void): Promise<PXE> {
-    WebLogger.create(setLogs);
-
-    const config = getPXEServiceConfig();
-    config.dataDirectory = 'pxe';
-    config.proverEnabled = true;
-    const l1Contracts = await aztecNode.getL1ContractAddresses();
-    const configWithContracts = {
-      ...config,
-      l1Contracts,
-    } as PXEServiceConfig;
-
-    const pxe = await createPXEService(aztecNode, configWithContracts, {
-      loggers: {
-        store: WebLogger.getInstance().createLogger('pxe:data:indexeddb'),
-        pxe: WebLogger.getInstance().createLogger('pxe:service'),
-        prover: WebLogger.getInstance().createLogger('bb:wasm:lazy'),
-      },
-    });
+  static async initPXE(nodeURL: string): Promise<PXE> {
+    const { PXE_URL = nodeURL } = process.env;
+    const pxe = createPXEClient(PXE_URL);
+    await waitForPXE(pxe);
     return pxe;
   }
+
+  static async getInitialWallets(pxe: PXE): Promise<AccountWalletWithSecretKey[]> {
+    const wallets = await getInitialTestAccountsWallets(pxe);
+    return wallets;
+  }
+
+  // static async initPXE(aztecNode: AztecNode, setLogs: (logs: Log[]) => void): Promise<PXE> {
+  //   WebLogger.create(setLogs);
+
+  //   const config = getPXEServiceConfig();
+  //   config.dataDirectory = 'pxe';
+  //   config.proverEnabled = true;
+  //   const l1Contracts = await aztecNode.getL1ContractAddresses();
+  //   const configWithContracts = {
+  //     ...config,
+  //     l1Contracts,
+  //   } as PXEServiceConfig;
+
+  //   const pxe = await createPXEService(aztecNode, configWithContracts, {
+  //     loggers: {
+  //       store: WebLogger.getInstance().createLogger('pxe:data:indexeddb'),
+  //       pxe: WebLogger.getInstance().createLogger('pxe:service'),
+  //       prover: WebLogger.getInstance().createLogger('bb:wasm:lazy'),
+  //     },
+  //   });
+    
+  //   return pxe;
+  // }
 }

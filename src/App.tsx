@@ -5,6 +5,7 @@ import type { Api } from '@remixproject/plugin-utils';
 import { createClient } from '@remixproject/plugin-iframe';
 import type { IRemixApi } from '@remixproject/plugin-api';
 import type { Client } from '@remixproject/plugin';
+import { AztecProvider } from './AztecProvider';
 
 function App() {
   const [client, setClient] = useState<Client<Api, Readonly<IRemixApi>> | undefined | null>(null);
@@ -23,7 +24,11 @@ function App() {
 
   return (
     <div className="App">
-      <Container>{client && <AztecPlugin client={client} />}</Container>
+      <Container>{client && 
+        <AztecProvider>
+          <AztecPlugin client={client} />
+        </AztecProvider>}
+      </Container>
     </div>
   );
 }

@@ -6,7 +6,11 @@ import JSZip from 'jszip';
 import axios from 'axios';
 import { FileUtil } from '../utils/fileutils';
 import type { InterfaceProps, FileInfo } from '../types';
-import { AztecAddress } from '@aztec/aztec.js';
+import {
+  loadContractArtifact,
+  Contract,
+} from '@aztec/aztec.js';
+import { encodeArguments, getDefaultInitializer, getInitializer, getAllFunctionAbis } from '@aztec/stdlib/abi';
 
 interface Parameter {
   name: string;
@@ -16,13 +20,12 @@ interface Parameter {
 export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const [openCompile, setOpenCompile] = useState(false);
   const [projectList, setProjectList] = useState<string[]>([]);
-  const [targetProject, setTargetProject] = useState<string>('');
+  const [targetProject, setLocalTargetProject] = useState<string>('');
   const [compileError, setCompileError] = useState<string | null>(null);
   const [compileLogs, setCompileLogs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState<string | null>(null);
-  const [contractFiles, setContractFiles] = useState<string[]>([]);
   const [selectedContract, setSelectedContract] = useState<string>('');
   const [parameters, setParameters] = useState<Parameter[]>([]);
   const [paramValues, setParamValues] = useState<Record<string, any>>({});
@@ -30,8 +33,10 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const wsRef = useRef<WebSocket | null>(null);
   const requestIdRef = useRef<string>('');
   const [contractArtifact, setContractArtifact] = useState<any>(null);
+  const [jsonFiles, setJsonFiles] = useState<string[]>([]);
+  const [lastCompiledJson, setLastCompiledJson] = useState<string | null>(null);
 
-  const { wallet, selectedAccount } = useContext(AztecContext);
+  const { wallet, setCurrentContract, setCurrentContractAddress, setTargetProject } = useContext(AztecContext);
 
   useEffect(() => {
     getList();
@@ -44,15 +49,16 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
 
   useEffect(() => {
     if (targetProject) {
+      setTargetProject(targetProject);
       checkDeployAvailability();
     } else {
       setCanDeploy(false);
-      setContractFiles([]);
       setSelectedContract('');
       setParameters([]);
       setParamValues({});
+      setJsonFiles([]);
     }
-  }, [targetProject]);
+  }, [targetProject, setTargetProject]);
 
   useEffect(() => {
     if (selectedContract) {
@@ -61,10 +67,8 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   }, [selectedContract]);
 
   useEffect(() => {
-    if (selectedAccount) {
-      setParamValues((prev) => ({ ...prev, admin: selectedAccount }));
-    }
-  }, [selectedAccount]);
+    console.log('CompileDeployCard sees wallet:', wallet?.getAddress().toString());
+  }, [wallet]);
 
   const generateUniqueId = () => {
     const timestamp = new Date().toISOString().replace(/[-:.]/g, '');
@@ -75,11 +79,11 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const getList = async () => {
     const projects = await getProjectHaveTomlFile('browser/aztec');
     setProjectList(projects);
-    setTargetProject(projects[0] || '');
+    setLocalTargetProject(projects[0] || '');
   };
 
   const setTarget = (e: { target: { value: string } }) => {
-    setTargetProject(e.target.value);
+    setLocalTargetProject(e.target.value);
   };
 
   const getProjectHaveTomlFile = async (path: string): Promise<string[]> => {
@@ -123,28 +127,24 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   };
 
   const checkDeployAvailability = async () => {
-    if (!targetProject) return;
-
-    const artifactsPath = `${targetProject}/src/artifacts`;
-    const targetPath = `${targetProject}/target`;
-
-    const artifactsFiles = await FileUtil.allFilesForBrowser(client, artifactsPath);
-    const targetFiles = await FileUtil.allFilesForBrowser(client, targetPath);
-
-    const hasTsFiles = artifactsFiles.some((file) => file.path.endsWith('.ts'));
-    const hasJsonFiles = targetFiles.some((file) => file.path.endsWith('.json'));
-    setCanDeploy(hasTsFiles || hasJsonFiles);
-
-    if (hasTsFiles) {
-      const tsFiles = artifactsFiles
-        .filter((file) => file.path.endsWith('.ts'))
-        .map((file) => file.path);
-      setContractFiles(tsFiles);
-      setSelectedContract(tsFiles[0] || '');
+    if (!targetProject) return; // targetProject가 없으면 종료
+  
+    const searchPath = `browser/${targetProject}`; // 예: browser/aztec/project1
+    console.log('Starting walk at:', searchPath);
+  
+    const foundJsons = await findAllJsonArtifacts(searchPath);
+    setJsonFiles(foundJsons);
+  
+    if (lastCompiledJson && foundJsons.includes(lastCompiledJson)) {
+      setSelectedContract(lastCompiledJson);
+    } else if (foundJsons.length > 0) {
+      setSelectedContract(foundJsons[0]);
     } else {
-      setContractFiles([]);
-      setSelectedContract('');
+      setSelectedContract(''); // .json 파일이 없으면 선택 초기화
     }
+  
+    console.log('Found JSON files for', targetProject, ':', foundJsons);
+    setCanDeploy(foundJsons.length > 0);
   };
 
   const loadContractParameters = async () => {
@@ -175,11 +175,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   
         const initialValues: Record<string, any> = {};
         params.forEach((param: Parameter) => {
-          if (param.name === 'admin' && selectedAccount) {
-            initialValues[param.name] = selectedAccount;
-          } else {
-            initialValues[param.name] = '';
-          }
+          initialValues[param.name] = '';
         });
         setParamValues(initialValues);
       } else {
@@ -256,6 +252,10 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
             const content = await file.async('string');
             const remixPath = `browser/${targetProject}/${path}`;
             await client.fileManager.writeFile(remixPath, content);
+
+            if (remixPath.endsWith('.json')) {
+              setLastCompiledJson(remixPath.replace('browser/', ''));
+            }
           }
         })
       );
@@ -273,45 +273,66 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     }
   };
 
+  const findAllJsonArtifacts = async (rootPath: string): Promise<string[]> => {
+    const all: string[] = [];
+  
+    const walk = async (path: string) => {
+      try {
+        const entries = await client.fileManager.readdir(path);
+        for (const [name, entry] of Object.entries(entries)) {
+          const relativeName = name.split('/').pop() || name;
+          const fullPath = `${path}/${relativeName}`;
+          console.log('Checking:', fullPath);
+  
+          if ((entry as any).isDirectory) {
+            await walk(fullPath);
+          } else if (name.endsWith('.json') && fullPath.includes('/target/')) {
+            const cleaned = fullPath.replace(/^browser\//, '');
+            all.push(cleaned); 
+          }
+        }
+      } catch (error) {
+        console.error(`Error reading directory ${path}:`, error);
+      }
+    };
+  
+    await walk(rootPath);
+    return all;
+  };
+  
   const handleDeploy = async () => {
+    
     if (!wallet) {
       setCompileError('Wallet not initialized. Connect to Aztec Sandbox first.');
-      return;
-    }
-    if (!targetProject) {
-      setCompileError('No target project selected!');
       return;
     }
     if (!selectedContract) {
       setCompileError('No contract selected for deployment!');
       return;
     }
-
-    setDeploying(true);
-    setCompileError(null);
-    setDeployResult(null);
-
+  
     try {
-      const contractModule = await import(/* @vite-ignore */ selectedContract);
-      const contractName = selectedContract.split('/').pop()?.replace('.ts', '');
-      const ContractClass = contractModule[`${contractName}Contract`];
+      setDeploying(true);
+      setCompileError(null);
+      setDeployResult(null);
+  
+      const artifactJson = await client.fileManager.readFile(`browser/${selectedContract}`);
+      const contractArtifact = loadContractArtifact(JSON.parse(artifactJson));
 
-      const args = parameters.map((param) => {
-        const value = paramValues[param.name];
-        if (param.name === 'admin') {
-          return AztecAddress.fromString(value);
-        }
-        if (param.type === 'integer') {
-          return BigInt(value);
-        }
-        return value;
-      });
+      const functionAbis = getAllFunctionAbis(contractArtifact);
+      const initializer = getInitializer(contractArtifact, functionAbis.find(fn => fn.isInitializer)?.name);
 
-      const deployTx = ContractClass.deploy(wallet, ...args);
-      const tx = await deployTx.send().wait();
+      const args = initializer?.parameters?.length
+        ? initializer.parameters.map(p => paramValues[p.name])
+        : [];
 
-      const contractAddress = tx.contractAddress.toString();
-      setDeployResult(`Contract deployed successfully at address: ${contractAddress}`);
+      const deployed = await Contract.deploy(wallet, contractArtifact, args)
+      .send().deployed()
+      
+      const contractAddress = deployed.instance.address;
+      setCurrentContract(deployed);
+      setCurrentContractAddress(contractAddress);
+      setDeployResult(`✅ Contract deployed at address: ${contractAddress}`);
       await client.terminal.log({ type: 'info', value: `✅ Contract deployed at ${contractAddress}` });
     } catch (error) {
       setCompileError(`Deployment failed: ${error.message}`);
@@ -382,31 +403,34 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                   'Compile'
                 )}
               </Button>
-
+  
+              {/* Info Message when no artifacts */}
+              {!canDeploy && targetProject && (
+                <Alert variant="info" className="mt-2">
+                  No compiled artifacts found. Please compile the project to generate .json files.
+                </Alert>
+              )}
+  
               {/* Deploy Section */}
-              {canDeploy && (
+              {canDeploy && jsonFiles.length > 0 && (
                 <>
                   <Form.Group className="mt-4">
                     <Form.Text className="text-muted">
                       <small>DEPLOY CONTRACT</small>
                     </Form.Text>
-                    {contractFiles.length > 0 && (
-                      <>
-                        <Form.Label>Select Contract</Form.Label>
-                        <Form.Control
-                          as="select"
-                          value={selectedContract}
-                          onChange={(e) => setSelectedContract(e.target.value)}
-                          className="mt-2"
-                        >
-                          {contractFiles.map((file, idx) => (
-                            <option key={idx} value={file}>
-                              {file.split('/').pop()}
-                            </option>
-                          ))}
-                        </Form.Control>
-                      </>
-                    )}
+                    <Form.Label>Select Artifact</Form.Label>
+                    <Form.Control
+                      as="select"
+                      value={selectedContract}
+                      onChange={(e) => setSelectedContract(e.target.value)}
+                      className="mt-2"
+                    >
+                      {jsonFiles.map((file, idx) => (
+                        <option key={idx} value={file}>
+                          {file.split('/').slice(-2).join('/')} {/* e.g., target/contract.json */}
+                        </option>
+                      ))}
+                    </Form.Control>
                     {parameters.map((param) => (
                       <div key={param.name}>
                         <Form.Label className="mt-2">{param.name}</Form.Label>
@@ -416,7 +440,6 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                           value={paramValues[param.name] || ''}
                           onChange={(e) => handleParamChange(param.name, e.target.value)}
                           className="mt-2"
-                          disabled={param.name === 'admin'} // admin은 선택된 계정으로 고정
                         />
                       </div>
                     ))}
@@ -435,7 +458,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                       'Deploy'
                     )}
                   </Button>
-
+  
                   {/* Deploy Result */}
                   {deployResult && (
                     <Alert variant="success" className="mt-2">

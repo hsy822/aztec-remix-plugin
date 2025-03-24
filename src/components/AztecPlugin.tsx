@@ -3,7 +3,7 @@ import { EnvironmentCard } from './EnvironmentCard';
 import { CompileDeployCard } from './CompileDeployCard';
 import { InteractCard } from './InteractCard';
 import { ProofCard } from './ProofCard';
-import { InterfaceProps } from '../types';
+import type { InterfaceProps } from '../types';
 
 export const AztecPlugin = ({ client }: InterfaceProps) => {
   return (
@@ -16,7 +16,7 @@ export const AztecPlugin = ({ client }: InterfaceProps) => {
       <EnvironmentCard client={client} />
       <CompileDeployCard client={client} />
       <InteractCard client={client} />
-      <ProofCard client={client} />
+      {/* <ProofCard client={client} /> */}
     </>
   );
 };
