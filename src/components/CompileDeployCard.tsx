@@ -17,6 +17,9 @@ interface Parameter {
   type: string;
 }
 
+const BASE_URL = process.env.REACT_APP_API_BASE_URL;
+const WS_URL = process.env.REACT_APP_WS_URL;
+
 export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const [openCompile, setOpenCompile] = useState(false);
   const [projectList, setProjectList] = useState<string[]>([]);
@@ -200,7 +203,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     setDeployResult(null);
 
     requestIdRef.current = generateUniqueId();
-    const ws = new WebSocket('ws://localhost:8082');
+    const ws = new WebSocket(`${WS_URL}`);
     wsRef.current = ws;
 
     await new Promise<void>((resolve, reject) => {
@@ -240,7 +243,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
       formData.append('projectPath', targetProject);
 
       const response = await axios.post(
-        `http://localhost:3000/compile?requestId=${requestIdRef.current}`,
+        `${BASE_URL}/compile?requestId=${requestIdRef.current}`,
         formData,
         { responseType: 'arraybuffer' }
       );
