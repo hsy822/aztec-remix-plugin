@@ -205,7 +205,6 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     setDeployResult(null);
 
     requestIdRef.current = generateUniqueId();
-    await checkQueueStatus();
 
     const ws = new WebSocket(`${WS_URL}`);
     wsRef.current = ws;
@@ -250,6 +249,8 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
         `${BASE_URL}/compile?requestId=${requestIdRef.current}`,
         formData
       );
+      
+      await checkQueueStatus();
 
       if (!response.data || !response.data.url) {
         throw new Error('S3 URL not returned from backend');
