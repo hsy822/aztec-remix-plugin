@@ -1,5 +1,5 @@
 import { useRef, useState, useContext, useEffect } from 'react';
-import { Collapse, Button, Card, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
+import { Collapse, Button, Card, Form, Alert, Spinner, InputGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { ChevronDown, ChevronUp, ArrowRepeat } from 'react-bootstrap-icons';
 import { AztecContext } from '../aztecEnv';
 import JSZip from 'jszip';
@@ -389,9 +389,11 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
               <Form.Group>
                 <Form.Text className="text-muted">
                   <small>TARGET PROJECT </small>
-                  <span style={{ cursor: 'pointer' }} onClick={getList}>
-                    <ArrowRepeat />
-                  </span>
+                  <OverlayTrigger placement="top" overlay={<Tooltip>Reload</Tooltip>}>
+                    <span style={{ cursor: 'pointer' }} onClick={getList}>
+                      <ArrowRepeat />
+                    </span>
+                  </OverlayTrigger>
                 </Form.Text>
                 <InputGroup className="mt-2">
                   <Form.Control
@@ -427,14 +429,17 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                 )}
               </Button>
               {loading && (
-                <div className="mt-3">
+                <div className="mt-3" style={{marginTop: "10px"}}>
                   <div className="d-flex align-items-center justify-content-between">
                     <Button size="sm" variant="outline-primary" onClick={checkQueueStatus}>
                       Check Compile Order
                     </Button>
                   </div>
                   {queuePosition !== null && (
-                    <Alert variant="info" className="mt-2">
+                    <Alert variant="info" className="mt-2" style={{
+                      fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                      fontSize: '12px',
+                    }}>
                       You're currently <strong>#{queuePosition + 1}</strong> in the queue.<br />
                     </Alert>
                   )}
@@ -442,12 +447,18 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
               )}
               {/* Info Message when no artifacts */}
               {!canDeploy && targetProject && (
-                <Alert variant="info" className="mt-2">
+                <Alert variant="info" className="mt-2" style={{
+                  fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontSize: '12px'
+                }}>
                   No compiled artifacts found. Please compile the project to generate .json files.
                 </Alert>
               )}
               {compileError && (
-                <Alert variant="danger" className="mt-2">
+                <Alert variant="danger" className="mt-2" style={{
+                  fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontSize: '12px',
+                }}>
                   {compileError}
                 </Alert>
               )}
@@ -459,18 +470,20 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                       <small>DEPLOY CONTRACT</small>
                     </Form.Text>
                     <Form.Label>Select Artifact</Form.Label>
-                    <Form.Control
-                      as="select"
-                      value={selectedContract}
-                      onChange={(e) => setSelectedContract(e.target.value)}
-                      className="mt-2"
-                    >
-                      {jsonFiles.map((file, idx) => (
-                        <option key={idx} value={file}>
-                          {file.split('/').slice(-2).join('/')} {/* e.g., target/contract.json */}
-                        </option>
-                      ))}
-                    </Form.Control>
+                    <InputGroup className="mt-2">
+                      <Form.Control
+                        className="custom-select"
+                        as="select"
+                        value={selectedContract}
+                        onChange={(e) => setSelectedContract(e.target.value)}
+                      >
+                        {jsonFiles.map((file, idx) => (
+                          <option key={idx} value={file}>
+                            {file.split('/').slice(-2).join('/')} {/* e.g., target/contract.json */}
+                          </option>
+                        ))}
+                      </Form.Control>
+                    </InputGroup>
                     {parameters.map((param) => (
                       <div key={param.name}>
                         <Form.Label className="mt-2">{param.name}</Form.Label>
@@ -501,7 +514,11 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   
                   {/* Deploy Result */}
                   {deployResult && (
-                    <Alert variant="success" className="mt-2">
+                    <Alert variant="success" className="mt-2" 
+                      style={{
+                        fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                        fontSize: '12px',
+                    }}>
                       {deployResult}
                     </Alert>
                   )}

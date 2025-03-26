@@ -1,11 +1,10 @@
 import { useState, useContext, useEffect } from 'react';
-import { Collapse, Button, Card, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
+import { Collapse, Button, Card, Form, Alert, Spinner, InputGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { ChevronDown, ChevronUp, Copy } from 'react-bootstrap-icons';
 import { AztecContext, AztecEnv } from '../aztecEnv';
-import { getInitialTestAccounts } from '@aztec/accounts/testing/lazy';
-import { getSchnorrAccount } from '@aztec/accounts/schnorr/lazy';
 import type { InterfaceProps } from '../types';
 import type { AccountWalletWithSecretKey, AztecNode, PXE } from '@aztec/aztec.js';
+import { copyToClipboard } from '../utils/clipboard';
 
 export const EnvironmentCard = ({ client }: InterfaceProps) => {
   const [openEnv, setOpenEnv] = useState(false);
@@ -80,34 +79,6 @@ export const EnvironmentCard = ({ client }: InterfaceProps) => {
     }
   };
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        fallbackCopyTextToClipboard(text);
-      }
-    } catch (err) {
-      console.warn('Clipboard API failed, using fallback', err);
-      fallbackCopyTextToClipboard(text);
-    }
-  };
-
-  const fallbackCopyTextToClipboard = (text: string) => {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.style.position = 'fixed';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    try {
-      document.execCommand('copy');
-    } catch (err) {
-      console.error('Fallback: Copy failed', err);
-    }
-    document.body.removeChild(textArea);
-  };
-
   return (
     <Card className="mb-3">
       <Card.Header
@@ -146,19 +117,21 @@ export const EnvironmentCard = ({ client }: InterfaceProps) => {
               )}
             </Button>
 
-            {envError && <Alert variant="danger" className="mt-2">{envError}</Alert>}
+            {envError && <Alert variant="danger" className="mt-2" style={{
+                            fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                            fontSize: '12px',
+                        }}>{envError}</Alert>}
 
             {accounts.length > 0 && (
               <Form.Group className="mt-3">
                 <div className="d-flex align-items-center justify-content-between mb-1">
                   <Form.Label className="mb-0">Sandbox Accounts</Form.Label>
                   {selectedAddress && (
-                    <Button
-                      size="sm"
-                      onClick={() => copyToClipboard(selectedAddress)}
-                    >
+                    <OverlayTrigger placement="top" overlay={<Tooltip>Copy Address</Tooltip>}>
+                      <span style={{ cursor: 'pointer' }} onClick={() => copyToClipboard(selectedAddress)}>
                       <Copy />
-                    </Button>
+                      </span>
+                    </OverlayTrigger>
                   )}
                 </div>
                 <InputGroup>
