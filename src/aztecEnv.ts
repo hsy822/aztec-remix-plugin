@@ -137,10 +137,20 @@ export class AztecEnv {
   }
 
   static async initPXE(nodeURL: string): Promise<PXE> {
-    const { PXE_URL = nodeURL } = process.env;
-    const pxe = createPXEClient(PXE_URL);
-    await waitForPXE(pxe);
-    return pxe;
+    const pxe = createPXEClient(nodeURL);
+  
+    const timeoutMs = 5000;
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        await pxe.getNodeInfo();
+        return pxe;
+      } catch (e) {
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+  
+    throw new Error('Timed out waiting for PXE to respond');
   }
 
   static async getInitialWallets(pxe: PXE): Promise<AccountWalletWithSecretKey[]> {

@@ -38,6 +38,8 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const [contractArtifact, setContractArtifact] = useState<any>(null);
   const [jsonFiles, setJsonFiles] = useState<string[]>([]);
   const [lastCompiledJson, setLastCompiledJson] = useState<string | null>(null);
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [queueWaitTime, setQueueWaitTime] = useState<number | null>(null);
 
   const { wallet, setCurrentContract, setCurrentContractAddress, setTargetProject } = useContext(AztecContext);
 
@@ -203,6 +205,8 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     setDeployResult(null);
 
     requestIdRef.current = generateUniqueId();
+    await checkQueueStatus();
+
     const ws = new WebSocket(`${WS_URL}`);
     wsRef.current = ws;
 
@@ -244,11 +248,16 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
 
       const response = await axios.post(
         `${BASE_URL}/compile?requestId=${requestIdRef.current}`,
-        formData,
-        { responseType: 'arraybuffer' }
+        formData
       );
 
-      const compiledZip = await JSZip.loadAsync(response.data);
+      if (!response.data || !response.data.url) {
+        throw new Error('S3 URL not returned from backend');
+      }
+      
+      const zipResponse = await axios.get(response.data.url, { responseType: 'arraybuffer' });
+      const compiledZip = await JSZip.loadAsync(zipResponse.data);
+
       await Promise.all(
         Object.entries(compiledZip.files).map(async ([path, file]) => {
           if (!file.dir) {
@@ -349,6 +358,19 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     setParamValues((prev) => ({ ...prev, [paramName]: value }));
   };
 
+  const checkQueueStatus = async () => {
+    try {
+      const res = await axios.get(`${BASE_URL}/queue/status`, {
+        params: { requestId: requestIdRef.current },
+      });
+  
+      setQueuePosition(res.data.position);
+      setQueueWaitTime(res.data.waitTime);
+    } catch (err) {
+      console.warn('Failed to check queue status', err);
+    }
+  };  
+
   return (
     <Card className="mb-3">
       <Card.Header
@@ -406,14 +428,36 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                   'Compile'
                 )}
               </Button>
-  
+              {loading && (
+                <div className="d-flex align-items-center justify-content-between mt-2">
+                  <Form.Text className="text-muted">
+                    {queuePosition !== null && (
+                      <>
+                        You're currently <strong>#{queuePosition + 1}</strong> in the queue.<br />
+                      </>
+                    )}
+                  </Form.Text>
+                  <Button
+                    size="sm"
+                    variant="outline-primary"
+                    onClick={checkQueueStatus}
+                    className="ms-3"
+                  >
+                    Refresh
+                  </Button>
+                </div>
+              )}
               {/* Info Message when no artifacts */}
               {!canDeploy && targetProject && (
                 <Alert variant="info" className="mt-2">
                   No compiled artifacts found. Please compile the project to generate .json files.
                 </Alert>
               )}
-  
+              {compileError && (
+                <Alert variant="danger" className="mt-2">
+                  {compileError}
+                </Alert>
+              )}
               {/* Deploy Section */}
               {canDeploy && jsonFiles.length > 0 && (
                 <>
@@ -466,11 +510,6 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                   {deployResult && (
                     <Alert variant="success" className="mt-2">
                       {deployResult}
-                    </Alert>
-                  )}
-                  {compileError && (
-                    <Alert variant="danger" className="mt-2">
-                      {compileError}
                     </Alert>
                   )}
                 </>

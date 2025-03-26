@@ -5,7 +5,7 @@ import { AztecContext, AztecEnv } from '../aztecEnv';
 import { getInitialTestAccounts } from '@aztec/accounts/testing/lazy';
 import { getSchnorrAccount } from '@aztec/accounts/schnorr/lazy';
 import type { InterfaceProps } from '../types';
-import type { AccountWalletWithSecretKey } from '@aztec/aztec.js';
+import type { AccountWalletWithSecretKey, AztecNode, PXE } from '@aztec/aztec.js';
 
 export const EnvironmentCard = ({ client }: InterfaceProps) => {
   const [openEnv, setOpenEnv] = useState(false);
@@ -26,34 +26,50 @@ export const EnvironmentCard = ({ client }: InterfaceProps) => {
   }, [wallet]);
 
   const connectToSandbox = async () => {
+    if (connecting || isConnected) return;
     setConnecting(true);
     setEnvError(null);
+  
+    const nodeURL = 'http://localhost:8080';
+  
+    const timeout = (ms: number) =>
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out')), ms));
+  
     try {
-      const nodeURL = 'http://localhost:8080';
-      const aztecNode = await AztecEnv.connectToNode(nodeURL);
+      const aztecNode = await Promise.race([
+        AztecEnv.connectToNode(nodeURL),
+        timeout(5000),
+      ]) as AztecNode;
+  
       setAztecNode(aztecNode);
       setNodeURL(nodeURL);
-      const pxeInstance = await AztecEnv.initPXE(nodeURL);
+  
+      const pxeInstance = await Promise.race([
+        AztecEnv.initPXE(nodeURL),
+        timeout(5000),
+      ]) as PXE;
+  
       setPXE(pxeInstance);
-
+  
       const wallets = await AztecEnv.getInitialWallets(pxeInstance);
       const accountWallets = wallets.map((wallet) => ({
         address: wallet.getAddress().toString(),
         walletInstance: wallet,
       }));
-
+  
       setAccounts(accountWallets);
       setSelectedAddress(accountWallets[0].address);
       setWallet(accountWallets[0].walletInstance);
       setPXEInitialized(true);
       setIsConnected(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setEnvError('Could not connect to the Aztec Sandbox. Is the Sandbox running?');
+      setEnvError('❌ Could not connect to the Aztec Sandbox. Is it running on http://localhost:8080?');
     } finally {
       setConnecting(false);
     }
   };
+  
 
   const handleAccountChange = (e: React.ChangeEvent<any>) => {
     const selectedAddress = (e.target as HTMLSelectElement).value;

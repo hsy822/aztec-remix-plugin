@@ -8,7 +8,7 @@
   "scripts": {
     "clean": "rm -rf ./dist .tsbuildinfo",
     "serve": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build --mode production",
     "deploy": "yarn build && gh-pages -d dist -r https://github.com/hsy822/hsy822.github.io.git",
     "lint": "eslint .",
     "preview": "vite preview",

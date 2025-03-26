@@ -25,6 +25,7 @@ const nodePolyfillsFix = (options?: PolyfillOptions | undefined): Plugin => {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
+    base: '/',
     logLevel: 'error',
     resolve: {
       preserveSymlinks: true,
@@ -80,6 +81,8 @@ export default defineConfig(({ mode }) => {
         // by adding the -threads suffix: e.g: /assets/barretenberg.wasm.gz -> /assets/barretenberg-threads.wasm.gz
         // Files can be compressed or uncompressed, but must be gzipped if compressed.
         BB_WASM_PATH: env.BB_WASM_PATH,
+        REACT_APP_API_BASE_URL: env.REACT_APP_API_BASE_URL,
+        REACT_APP_WS_URL: env.REACT_APP_WS_URL,
       }),
     },
     build: {
