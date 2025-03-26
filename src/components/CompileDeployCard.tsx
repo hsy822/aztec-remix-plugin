@@ -250,8 +250,6 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
         formData
       );
       
-      await checkQueueStatus();
-
       if (!response.data || !response.data.url) {
         throw new Error('S3 URL not returned from backend');
       }
@@ -366,7 +364,6 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
       });
   
       setQueuePosition(res.data.position);
-      setQueueWaitTime(res.data.waitTime);
     } catch (err) {
       console.warn('Failed to check queue status', err);
     }
@@ -430,22 +427,17 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                 )}
               </Button>
               {loading && (
-                <div className="d-flex align-items-center justify-content-between mt-2">
-                  <Form.Text className="text-muted">
-                    {queuePosition !== null && (
-                      <>
-                        You're currently <strong>#{queuePosition + 1}</strong> in the queue.<br />
-                      </>
-                    )}
-                  </Form.Text>
-                  <Button
-                    size="sm"
-                    variant="outline-primary"
-                    onClick={checkQueueStatus}
-                    className="ms-3"
-                  >
-                    Refresh
-                  </Button>
+                <div className="mt-3">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <Button size="sm" variant="outline-primary" onClick={checkQueueStatus}>
+                      Check Compile Order
+                    </Button>
+                  </div>
+                  {queuePosition !== null && (
+                    <Alert variant="info" className="mt-2">
+                      You're currently <strong>#{queuePosition + 1}</strong> in the queue.<br />
+                    </Alert>
+                  )}
                 </div>
               )}
               {/* Info Message when no artifacts */}
