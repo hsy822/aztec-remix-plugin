@@ -277,17 +277,21 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     setCallError(null);
 
     try {
-      const params = selectedFunctionAbi.abi.parameters.map((param: any) => {
-        const value = callParams[selectedFunction]?.[param.name];
-        if (value === undefined || value === '') {
-          throw new Error(`Parameter ${param.name} is required.`);
-        }
-        const converted = convertParameter(param, value);
-        if (converted === undefined) {
-          throw new Error(`Invalid value for parameter ${param.name}.`);
-        }
-        return converted;
-      });
+      const params = selectedFunctionAbi.abi.parameters
+        .filter((param: any, index: number) => {
+          const isPrivate = selectedFunctionAbi.custom_attributes?.includes('private');
+          return !(isPrivate && index === 0 && param.name === 'inputs');
+        }).map((param: any) => {
+          const value = callParams[selectedFunction]?.[param.name];
+          if (value === undefined || value === '') {
+            throw new Error(`Parameter ${param.name} is required.`);
+          }
+          const converted = convertParameter(param, value);
+          if (converted === undefined) {
+            throw new Error(`Invalid value for parameter ${param.name}.`);
+          }
+          return converted;
+        });
 
       console.log('InteractCard - Function call parameters:', params);
 
@@ -322,6 +326,8 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     ? functionAbis.filter((fn) => {
         const isForbidden = FORBIDDEN_FUNCTIONS.includes(fn.name);
         const isInternal = fn.custom_attributes?.includes('internal') || false;
+        const isInitializer = Array.isArray(fn.custom_attributes) && fn.custom_attributes.includes('initializer');
+      
         const matchesSearch =
           filters.searchTerm === '' || fn.name.toLowerCase().includes(filters.searchTerm.toLowerCase());
 
@@ -338,7 +344,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
           (filters.public && functionType === 'public') ||
           (filters.unconstrained && isUnconstrained);
 
-        return !isInternal && !isForbidden && matchesType && matchesSearch;
+        return !isInternal && !isForbidden && !isInitializer && matchesType && matchesSearch;
       })
     : [];
 
@@ -546,19 +552,23 @@ export const InteractCard = ({ client }: InterfaceProps) => {
                     <div className="mt-3">
                       {selectedFunctionAbi.abi.parameters &&
                       selectedFunctionAbi.abi.parameters.length > 0 ? (
-                        selectedFunctionAbi.abi.parameters.map((param: any) => (
-                          <Form.Group key={param.name} className="mb-2"   style={{marginTop: "10px"}}>
-                            <Form.Label>{param.name}</Form.Label>
-                            <Form.Control
-                              type={param.type.kind === 'integer' ? 'number' : 'text'}
-                              placeholder={`Enter ${param.name}`}
-                              value={callParams[selectedFunction]?.[param.name] || ''}
-                              onChange={(e) =>
-                                handleParameterChange(selectedFunction, param.name, e.target.value)
-                              }
-                            />
-                          </Form.Group>
-                        ))
+                        selectedFunctionAbi.abi.parameters
+                          .filter((param: any, index: number) => {
+                            const isPrivate = selectedFunctionAbi.custom_attributes?.includes('private');
+                            const isFirst = index === 0;
+                            return !(isPrivate && isFirst && param.name === 'inputs');
+                          })
+                          .map((param: any) => (
+                            <Form.Group key={param.name} className="mb-2" style={{ marginTop: '10px' }}>
+                              <Form.Label>{param.name}</Form.Label>
+                              <Form.Control
+                                type={param.type.kind === 'integer' ? 'number' : 'text'}
+                                placeholder={`Enter ${param.name}`}
+                                value={callParams[selectedFunction]?.[param.name] || ''}
+                                onChange={(e) => handleParameterChange(selectedFunction, param.name, e.target.value)}
+                              />
+                            </Form.Group>
+                          ))
                       ) : (
                         <p>No parameters for this function.</p>
                       )}

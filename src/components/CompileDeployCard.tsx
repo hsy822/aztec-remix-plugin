@@ -28,6 +28,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const [compileLogs, setCompileLogs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [deploying, setDeploying] = useState(false);
+  const [deployError, setDeployError] = useState<string | null>(null);
   const [deployResult, setDeployResult] = useState<string | null>(null);
   const [selectedContract, setSelectedContract] = useState<string>('');
   const [parameters, setParameters] = useState<Parameter[]>([]);
@@ -153,33 +154,30 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   };
 
   const loadContractParameters = async () => {
-    if (!client || !targetProject) return;
+    if (!client || !targetProject || !selectedContract) return;
   
     try {
-      const targetPath = `${targetProject}/target`;
-      const targetFiles = await FileUtil.allFilesForBrowser(client, targetPath);
+      const artifactJson = await client.fileManager.readFile(`browser/${selectedContract}`);
+      const parsed = JSON.parse(artifactJson);
+      const artifact = loadContractArtifact(parsed); 
   
-      const jsonFile = targetFiles.find((file) => file.path.endsWith('.json'));
-      if (!jsonFile) {
-        setCompileError('No compiled artifact (.json) found in target folder.');
-        return;
-      }
-  
-      const jsonContent = await client.fileManager.readFile(jsonFile.path);
-      const artifact = JSON.parse(jsonContent);
       setContractArtifact(artifact);
   
-      const deployMethod = artifact.functions?.find((fn: any) => fn.name === 'constructor');
-  
-      if (deployMethod) {
-        const params = deployMethod.abi.parameters.map((param: any) => ({
+      const initializer = getDefaultInitializer(artifact); 
+      if (initializer && initializer.parameters?.length) {
+
+        const filteredParams = initializer.parameters.filter(
+          p => !(initializer.functionType === 'private' && p.name === 'inputs')
+        );
+
+        const params = filteredParams.map((param) => ({
           name: param.name,
           type: param.type.kind,
         }));
         setParameters(params);
   
         const initialValues: Record<string, any> = {};
-        params.forEach((param: Parameter) => {
+        params.forEach((param) => {
           initialValues[param.name] = '';
         });
         setParamValues(initialValues);
@@ -187,11 +185,12 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
         setParameters([]);
         setParamValues({});
       }
-    } catch (error) {
-      console.error('Failed to load contract parameters:', error);
-      setCompileError('Failed to load contract parameters: ' + error.message);
+    } catch (err: any) {
+      setCompileError(`Failed to load contract parameters: ${err.message}`);
+      console.error('loadContractParameters error:', err);
     }
   };
+  
 
   const handleCompile = async () => {
     if (!targetProject) {
@@ -314,17 +313,17 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const handleDeploy = async () => {
     
     if (!wallet) {
-      setCompileError('Wallet not initialized. Connect to Aztec Sandbox first.');
+      setDeployError('Wallet not initialized. Connect to Aztec Sandbox first.');
       return;
     }
     if (!selectedContract) {
-      setCompileError('No contract selected for deployment!');
+      setDeployError('No contract selected for deployment!');
       return;
     }
   
     try {
       setDeploying(true);
-      setCompileError(null);
+      setDeployError(null);
       setDeployResult(null);
   
       const artifactJson = await client.fileManager.readFile(`browser/${selectedContract}`);
@@ -346,7 +345,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
       setDeployResult(`✅ Contract deployed at address: ${contractAddress}`);
       await client.terminal.log({ type: 'info', value: `✅ Contract deployed at ${contractAddress}` });
     } catch (error) {
-      setCompileError(`Deployment failed: ${error.message}`);
+      setDeployError(`Deployment failed: ${error.message}`);
       await client.terminal.log({ type: 'error', value: `❌ Deployment failed: ${error.message}` });
     } finally {
       setDeploying(false);
@@ -520,6 +519,14 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                         fontSize: '12px',
                     }}>
                       {deployResult}
+                    </Alert>
+                  )}
+                  {deployError && (
+                    <Alert variant="danger" className="mt-2" style={{
+                      fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                      fontSize: '12px',
+                    }}>
+                      {deployError}
                     </Alert>
                   )}
                 </>
