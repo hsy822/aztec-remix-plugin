@@ -1,8 +1,8 @@
-import { Badge } from 'react-bootstrap';
+import { Badge, Button } from 'react-bootstrap';
 import { EnvironmentCard } from './EnvironmentCard';
 import { CompileDeployCard } from './CompileDeployCard';
 import { InteractCard } from './InteractCard';
-import { ProofCard } from './ProofCard';
+// import { ProofCard } from './ProofCard';
 import type { InterfaceProps } from '../types';
 
 export const AztecPlugin = ({ client }: InterfaceProps) => {
@@ -12,6 +12,16 @@ export const AztecPlugin = ({ client }: InterfaceProps) => {
         <Badge bg="warning" text="dark">
           ALPHA
         </Badge>
+        <a
+          href="https://github.com/hsy822/aztec-remix-plugin/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ textDecoration: 'none' }}
+        >
+          <Button size="sm" variant="outline-info">
+            Report Issue
+          </Button>
+        </a>
       </div>
       <EnvironmentCard client={client} />
       <CompileDeployCard client={client} />

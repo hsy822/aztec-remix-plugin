@@ -41,8 +41,22 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   const [lastCompiledJson, setLastCompiledJson] = useState<string | null>(null);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [queueWaitTime, setQueueWaitTime] = useState<number | null>(null);
+  const [examples, setExamples] = useState<string[]>([]);
+  const [exampleToImport, setExampleToImport] = useState<string>('');
 
   const { wallet, setCurrentContract, setCurrentContractAddress, setTargetProject } = useContext(AztecContext);
+
+  useEffect(() => {
+    const fetchExamples = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/examples`);
+        setExamples(res.data.examples);
+      } catch (err) {
+        console.error('Failed to fetch examples', err);
+      }
+    };
+    fetchExamples();
+  }, []);
 
   useEffect(() => {
     getList();
@@ -133,9 +147,9 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
   };
 
   const checkDeployAvailability = async () => {
-    if (!targetProject) return; // targetProject가 없으면 종료
+    if (!targetProject) return; 
   
-    const searchPath = `browser/${targetProject}`; // 예: browser/aztec/project1
+    const searchPath = `browser/${targetProject}`;
     console.log('Starting walk at:', searchPath);
   
     const foundJsons = await findAllJsonArtifacts(searchPath);
@@ -146,7 +160,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     } else if (foundJsons.length > 0) {
       setSelectedContract(foundJsons[0]);
     } else {
-      setSelectedContract(''); // .json 파일이 없으면 선택 초기화
+      setSelectedContract('');
     }
   
     console.log('Found JSON files for', targetProject, ':', foundJsons);
@@ -368,6 +382,61 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     }
   };  
 
+  const importExample = async (exampleName: string) => {
+    if (!client) return
+
+    const targetPath = `browser/aztec/${exampleName}`;
+    
+    try {
+      const existing = await client.fileManager.readdir(targetPath);
+
+      if (Object.keys(existing).length > 0) {
+        await client.terminal.log({
+          type: 'warn',
+          value: `⚠️ Project "${exampleName}" already exists. Import canceled.`,
+        });
+        return;
+      }
+    } catch (err) {
+    }
+
+    try {
+      const res = await axios.get(`${BASE_URL}/examples/url`, {
+        params: { name: exampleName },
+      });
+  
+      if (!res.data.url) throw new Error('No download URL received');
+  
+      const zipRes = await axios.get(res.data.url, { responseType: 'arraybuffer' });
+      const zip = await JSZip.loadAsync(zipRes.data);
+      const rootFolder = Object.keys(zip.files)[0]?.split('/')[0]; // 'counter' from 'counter/main.nr'
+  
+      await Promise.all(
+        Object.entries(zip.files).map(async ([zipPath, file]) => {
+          if (!file.dir && zipPath.startsWith(`${rootFolder}/`)) {
+            const relativePath = zipPath.replace(`${rootFolder}/`, '');
+            const remixPath = `${targetPath}/${relativePath}`;
+            const content = await file.async('string');
+            await client.fileManager.writeFile(remixPath, content);
+          }
+        })
+      );
+  
+      await client.terminal.log({ type: 'info', value: `✅ Example "${exampleName}" imported.` });
+      setLocalTargetProject(`aztec/${exampleName}`);
+
+      await getList();
+      setLocalTargetProject(`aztec/${exampleName}`);
+      setExampleToImport('');
+    } catch (err: any) {
+      console.error(`Failed to import example ${exampleName}`, err);
+      await client.terminal.log({
+        type: 'error',
+        value: `❌ Failed to import ${exampleName}: ${err.message}`,
+      });
+    }
+  };
+  
   return (
     <Card className="mb-3">
       <Card.Header
@@ -387,6 +456,35 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
               {/* Compile Section */}
               <Form.Group>
                 <Form.Text className="text-muted">
+                  <small>IMPORT EXAMPLE PROJECT</small>
+                </Form.Text>
+                <InputGroup className="mt-2">
+                  <Form.Control
+                    className="custom-select"
+                    as="select"
+                    value={exampleToImport}
+                    onChange={(e) => setExampleToImport(e.target.value)}
+                  >
+                    <option value="">-- Select Example --</option>
+                    {examples.map((exampleName) => (
+                      <option key={exampleName} value={exampleName}>
+                        {exampleName}
+                      </option>
+                    ))}
+                  </Form.Control>
+                </InputGroup>
+                <Button
+                  className="w-100 mt-2"
+                  variant="secondary"
+                  disabled={!exampleToImport}
+                  onClick={() => importExample(exampleToImport)}
+                >
+                  Import Selected Example
+                </Button>
+              </Form.Group>
+
+              <Form.Group className="mt-3" style={{marginTop: "10px"}}>
+                <Form.Text className="text-muted">
                   <small>TARGET PROJECT </small>
                   <OverlayTrigger placement="top" overlay={<Tooltip>Reload</Tooltip>}>
                     <span style={{ cursor: 'pointer' }} onClick={getList}>
@@ -395,23 +493,25 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                   </OverlayTrigger>
                 </Form.Text>
                 <InputGroup className="mt-2">
-                  <Form.Control
-                    className="custom-select"
-                    as="select"
-                    value={targetProject}
-                    onChange={setTarget}
+                  <OverlayTrigger
+                    placement="top"
+                    overlay={<Tooltip>The project must be located under the `aztec` folder in the root directory.</Tooltip>}
                   >
-                    <option value="">-- Select Project --</option>
-                    {projectList.map((projectName, idx) => (
-                      <option value={projectName} key={idx}>
-                        {projectName}
-                      </option>
-                    ))}
-                  </Form.Control>
+                    <Form.Control
+                      className="custom-select"
+                      as="select"
+                      value={targetProject}
+                      onChange={setTarget}
+                    >
+                      <option value="">-- Select Project --</option>
+                      {projectList.map((projectName, idx) => (
+                        <option value={projectName} key={idx}>
+                          {projectName}
+                        </option>
+                      ))}
+                    </Form.Control>
+                  </OverlayTrigger>
                 </InputGroup>
-                <small className="text-muted mt-2 d-block">
-                  The project must be located under the `aztec` folder in the root directory.
-                </small>
               </Form.Group>
               <Button
                 variant="primary"

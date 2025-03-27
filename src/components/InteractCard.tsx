@@ -49,12 +49,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
 
           const jsonFile = targetFiles.find((file) => file.path.endsWith('.json'));
           if (!jsonFile) {
-            const errorMsg = `No compiled artifact (.json) found in ${targetPath}. Available files: ${
-              targetFiles.length > 0
-                ? targetFiles.map((f) => f.path).join(', ')
-                : 'none'
-            }`;
-            setCallError(errorMsg);
+            await client.terminal.log({ type: 'warn', value: `No compiled artifact (.json) found in ${targetPath}. Compile the project first.` });
             return;
           }
 
@@ -429,14 +424,19 @@ export const InteractCard = ({ client }: InterfaceProps) => {
                       At Address
                     </Button>
                   </OverlayTrigger>
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter contract address"
-                    value={atAddressInput}
-                    onChange={(e) => {
-                      setAtAddressInput(e.target.value);
-                    }}
-                  />
+                  <OverlayTrigger
+                    placement="top"
+                    overlay={<Tooltip>Address of Contract</Tooltip>}
+                  >
+                    <Form.Control
+                      type="text"
+                      placeholder="contract address"
+                      value={atAddressInput}
+                      onChange={(e) => {
+                        setAtAddressInput(e.target.value);
+                      }}
+                    />
+                  </OverlayTrigger>
                 </InputGroup>
                 {atAddressError && (
                   <Alert variant="danger" className="mt-2 d-flex justify-content-between align-items-center" style={{
