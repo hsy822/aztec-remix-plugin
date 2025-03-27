@@ -19,13 +19,11 @@ A Remix plugin for compiling, deploying, and interacting with **Aztec** private 
 
 ### Load the Plugin
 
-Go to https://remix.ethereum.org and Click Plugin Manager
+Go to https://remix.ethereum.org and Click **Plugin Manager**
 
 Click "Connect to a Local Plugin"
 
-Enter: https://hsy822.github.io/
-
-Click OK
+Enter `https://hsy822.github.io/` in the **URL** field, select **iframe** and **side panel**, then click **OK**.
 
 ### Open the Aztec Plugin
 
