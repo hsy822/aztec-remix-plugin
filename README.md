@@ -19,7 +19,7 @@ A Remix plugin for compiling, deploying, and interacting with **Aztec** private 
 
 ### Load the Plugin
 
-Go to Plugin Manager
+Go to https://remix.ethereum.org and Click Plugin Manager
 
 Click "Connect to a Local Plugin"
 
