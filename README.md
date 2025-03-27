@@ -17,7 +17,7 @@ A Remix plugin for compiling, deploying, and interacting with **Aztec** private 
 
 ## How to Use
 
-1. Load the Plugin
+### Load the Plugin
 
 Go to Plugin Manager
 
@@ -27,13 +27,14 @@ Enter: https://hsy822.github.io/
 
 Click OK
 
-2. Open the Aztec Plugin
+### Open the Aztec Plugin
 
 Click the 🛰️ Aztec logo on the left panel
 
 Start coding with Aztec smart contracts!
 
 ![Alt text](./screenshots/step1.png)
+
 ![Alt text](./screenshots/step2.png)
 
 ## Getting Started
