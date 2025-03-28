@@ -180,8 +180,12 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
       const initializer = getDefaultInitializer(artifact); 
       if (initializer && initializer.parameters?.length) {
 
+        // const filteredParams = initializer.parameters.filter(
+        //   p => !(initializer.functionType === 'private' && p.name === 'inputs')
+        // );
+
         const filteredParams = initializer.parameters.filter(
-          p => !(initializer.functionType === 'private' && p.name === 'inputs')
+          (p: any) => !(p.name === 'inputs' && p.type.path === 'aztec::context::inputs::private_context_inputs::PrivateContextInputs')
         );
 
         const params = filteredParams.map((param) => ({

@@ -4,6 +4,10 @@ A Remix plugin for compiling, deploying, and interacting with **Aztec** private 
 
 ---
 
+![Alt text](./screenshots/step1.png)
+
+![Alt text](./screenshots/step2.png)
+
 ## 🔧 Features
 
 - Compile Aztec Noir smart contracts using `aztec-nargo`
@@ -27,13 +31,9 @@ Enter `https://hsy822.github.io/` in the **URL** field, select **iframe** and **
 
 ### Open the Aztec Plugin
 
-Click the 🛰️ Aztec logo on the left panel
+Click the Plugin logo on the left panel
 
 Start coding with Aztec smart contracts!
-
-![Alt text](./screenshots/step1.png)
-
-![Alt text](./screenshots/step2.png)
 
 ## Getting Started
 

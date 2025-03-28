@@ -300,7 +300,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
         console.log('InteractCard - Simulate result:', result);
         await client.terminal.log({ type: 'info', value: `Simulation successful:\n${serializeBigInt(result)}` });
       } else {
-        const tx = await method(...params).send();
+        const tx = await method(...params).send()
         const receipt = await tx.wait();
         console.log('InteractCard - Send result:', receipt);
         await client.terminal.log({ type: 'info', value: `Transaction successful:\n${serializeBigInt(receipt)}` });
