@@ -93,7 +93,7 @@ To interact with a contract deployed externally:
 
 This plugin currently supports the **Aztec Sandbox** only.
 
-> Make sure you're running the local sandbox (`aztec sandbox start`) at `http://localhost:8080`.
+> Make sure you're running the local sandbox (`aztec start --sandbox`) at `http://localhost:8080`.
 
 ---
 
