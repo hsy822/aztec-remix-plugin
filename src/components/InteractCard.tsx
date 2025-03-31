@@ -1,11 +1,11 @@
 import { useState, useEffect, useContext } from 'react';
 import { Collapse, Button, Card, Form, InputGroup, Alert } from 'react-bootstrap';
-import { ChevronDown, ChevronUp, X, Trash, Clipboard } from 'react-bootstrap-icons';
+import { ChevronDown, ChevronUp, X, Trash, Clipboard, ArrowRepeat } from 'react-bootstrap-icons';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Tooltip from 'react-bootstrap/Tooltip';
 import { AztecContext } from '../aztecEnv';
 import type { InterfaceProps, FileInfo } from '../types';
-import { Contract, AztecAddress, loadContractArtifact } from '@aztec/aztec.js';
+import { Contract, AztecAddress, loadContractArtifact, AuthWitness, SentTx } from '@aztec/aztec.js';
 import { FileUtil } from '../utils/fileutils';
 import { getAllFunctionAbis } from '@aztec/stdlib/abi';
 import { copyToClipboard } from '../utils/clipboard';
@@ -37,6 +37,14 @@ export const InteractCard = ({ client }: InterfaceProps) => {
   const [callParams, setCallParams] = useState<Record<string, Record<string, any>>>({});
   const [isSimulating, setIsSimulating] = useState(false);
   const [isSending, setIsSending] = useState(false);
+
+  const [showAuthwitForm, setShowAuthwitForm] = useState(false);
+  const [caller, setCaller] = useState('');
+  const [alias, setAlias] = useState('');
+  const [creatingAuthwit, setCreatingAuthwit] = useState(false);
+  const [useAuthwit, setUseAuthwit] = useState(false);
+  const [savedAliases, setSavedAliases] = useState<string[]>([]);
+  const [selectedAlias, setSelectedAlias] = useState('');
 
   const { wallet, currentContract, currentContractAddress, targetProject, node } = useContext(AztecContext);
 
@@ -77,12 +85,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
 
       loadArtifact();
     } else {
-      console.log('InteractCard - Missing required context data:', {
-        currentContract: !!currentContract,
-        currentContractAddress: !!currentContractAddress,
-        wallet: !!wallet,
-        targetProject: !!targetProject,
-      });
     }
   }, [currentContract, currentContractAddress, wallet, targetProject, client]);
 
@@ -90,12 +92,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     if (selectedInstance) {
       try {
         const abis = getAllFunctionAbis(selectedInstance.artifact);
-        console.log('InteractCard - Loaded function ABIs:', abis);
-        abis.forEach((fn, index) => {
-          console.log(
-            `Function ${index} - Name: ${fn.name}, custom_attributes: ${(fn as any).custom_attributes}, is_unconstrained: ${(fn as any).is_unconstrained}`
-          );
-        });
         setFunctionAbis(abis);
         setSelectedFunction(null);
         setCallParams({});
@@ -114,6 +110,23 @@ export const InteractCard = ({ client }: InterfaceProps) => {
       setCallError(null);
     }
   }, [selectedInstance]);
+
+  useEffect(() => {
+    if (client) loadSavedAuthwitAliases();
+  }, [client]);
+
+  const loadSavedAuthwitAliases = async () => {
+    try {
+      const authwitPath = 'aztec/authwit';
+      const fileMap = await client.fileManager.readdir(authwitPath);
+      const aliases = Object.keys(fileMap)
+        .filter(key => !fileMap[key].isDirectory && key.endsWith('.txt'))
+        .map(key => key.split('/').pop().replace('.txt', ''));
+      setSavedAliases(aliases);
+    } catch (err) {
+      console.warn('Failed to load saved AuthWitness aliases:', err);
+    }
+  };
 
   const handleToggleInteract = () => {
     setOpenInteract((prev) => {
@@ -195,9 +208,10 @@ export const InteractCard = ({ client }: InterfaceProps) => {
   };
   
 
-  const handleFunctionChange = (e: React.ChangeEvent<any>) => {
+  const handleFunctionChange = async (e: React.ChangeEvent<any>) => {
     const fnName = e.target.value;
     setSelectedFunction(fnName);
+    await loadSavedAuthwitAliases();
   };
 
   const handleFilterChange = (key: string, value: any) => {
@@ -288,8 +302,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
           return converted;
         });
 
-      console.log('InteractCard - Function call parameters:', params);
-
       const method = selectedInstance.contract.methods[selectedFunction];
       if (!method) {
         throw new Error(`Function ${selectedFunction} not found in contract.`);
@@ -297,12 +309,24 @@ export const InteractCard = ({ client }: InterfaceProps) => {
 
       if (mode === 'simulate') {
         const result = await method(...params).simulate();
-        console.log('InteractCard - Simulate result:', result);
         await client.terminal.log({ type: 'info', value: `Simulation successful:\n${serializeBigInt(result)}` });
       } else {
-        const tx = await method(...params).send()
+        let tx: SentTx;
+        if (useAuthwit && selectedAlias) {
+          const witnessJson = await client.fileManager.readFile(`aztec/authwit/${selectedAlias}.txt`);
+          const parsed = JSON.parse(witnessJson)
+          
+          if (selectedFunctionAbi?.custom_attributes?.includes('public')) {
+            tx = await currentContract.methods[selectedFunction](...params).send();
+          } else {
+            tx = await currentContract.methods[selectedFunction](...params).send({
+              authWitnesses: [parsed.witness],
+            });
+          }
+        } else {
+          tx = await currentContract.methods[selectedFunction](...params).send();
+        }
         const receipt = await tx.wait();
-        console.log('InteractCard - Send result:', receipt);
         await client.terminal.log({ type: 'info', value: `Transaction successful:\n${serializeBigInt(receipt)}` });
       }
     } catch (error) {
@@ -343,8 +367,6 @@ export const InteractCard = ({ client }: InterfaceProps) => {
       })
     : [];
 
-  console.log('InteractCard - Filtered functions:', filteredFunctions);
-
   const selectedFunctionAbi = functionAbis.find((fn) => fn.name === selectedFunction);
 
   const shortenAddress = (addr: string) => {
@@ -352,6 +374,107 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     return addr.length > 12 ? `${addr.slice(0, 8)}...${addr.slice(-6)}` : addr;
   };
 
+  const handleCreateAuthwit = async () => {
+    try {
+      setCreatingAuthwit(true);
+      setCallError(null);
+  
+      if (!wallet || !currentContract || !selectedFunction || !selectedFunctionAbi) {
+        throw new Error('Missing wallet, contract, or function');
+      }
+  
+      const params = selectedFunctionAbi.abi.parameters
+        .filter((param: any, index: number) => {
+          const isPrivate = selectedFunctionAbi.custom_attributes?.includes('private');
+          return !(isPrivate && index === 0 && param.name === 'inputs');
+        })
+        .map((param: any) => {
+          const value = callParams[selectedFunction]?.[param.name];
+          const converted = convertParameter(param, value);
+          if (converted === undefined || converted === null) {
+            throw new Error(`Invalid or missing value for parameter: ${param.name}`);
+          }
+          return converted;
+        });
+  
+      const action = currentContract.methods[selectedFunction](...params);
+  
+      if (!caller || !alias) {
+        throw new Error('Caller and alias are required.');
+      }
+  
+      const proofDir = 'aztec/authwit';
+      const fileName = `${alias}.txt`;
+      const fileMap = await client.fileManager.readdir(proofDir);
+      const exists = Object.keys(fileMap).some(key => key.split('/').pop() === fileName);
+      if (exists) {
+        setCallError(`❗️AuthWitness with alias "${alias}" already exists in ${proofDir}. Please choose a different name.`);
+        return;
+      }
+  
+      const isPublic = selectedFunctionAbi?.custom_attributes?.includes('public');
+      let meta;
+      if (isPublic) {
+        const interaction = await wallet.setPublicAuthWit(
+          {
+            caller: AztecAddress.fromString(caller),
+            action,
+          },
+          true,
+        );
+        const receipt = await interaction.send().wait();
+  
+        await client.terminal.log({
+          type: 'info',
+          value: `✅ Public AuthWitness registered on-chain for function "${selectedFunction}"\nTx Hash: ${receipt.txHash}`,
+        });
+  
+        meta = JSON.stringify(
+          {
+            type: 'public',
+            caller,
+            action: action,
+            txHash: receipt.txHash,
+            createdAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        );
+  
+        await client.fileManager.writeFile(`${proofDir}/${fileName}`, meta);
+      } else {
+        const witness = await wallet.createAuthWit({
+          caller: AztecAddress.fromString(caller),
+          action,
+        });
+  
+        meta = JSON.stringify(
+          {
+            type: 'private',
+            caller,
+            witness: witness.toJSON(),
+            createdAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        );
+
+        await client.fileManager.writeFile(`${proofDir}/${fileName}`, meta);
+  
+        await client.terminal.log({
+          type: 'info',
+          value: `✅ Private AuthWitness created and saved to ${proofDir}/${fileName}`,
+        });
+        await loadSavedAuthwitAliases();  
+      }
+    } catch (err: any) {
+      console.error('handleCreateAuthwit - error:', err);
+      setCallError(`AuthWitness creation failed: ${err.message}`);
+    } finally {
+      setCreatingAuthwit(false);
+    }
+  };
+  
   return (
     <Card className="mb-3">
       <Card.Header
@@ -439,14 +562,30 @@ export const InteractCard = ({ client }: InterfaceProps) => {
                   </OverlayTrigger>
                 </InputGroup>
                 {atAddressError && (
-                  <Alert variant="danger" className="mt-2 d-flex justify-content-between align-items-center" style={{
-                    fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                    fontSize: '12px',
-                  }}>
-                    <span>{atAddressError}</span>
-                    <Button variant="link" onClick={handleCloseAtAddressError} className="p-0">
-                      <X size={20} />
-                    </Button>
+                  <Alert
+                    variant="danger"
+                    className="mt-2"
+                    style={{
+                      fontFamily: 'Menlo, Monaco, Consolas, "Courier New", monospace',
+                      fontSize: '12px',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    <div className="d-flex justify-content-between align-items-start w-100">
+                      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {atAddressError}
+                      </div>
+                      <Button
+                        variant="link"
+                        onClick={handleCloseAtAddressError}
+                        className="p-0 ms-2"
+                        style={{ lineHeight: 1 }}
+                      >
+                        <X size={20} />
+                      </Button>
+                    </div>
                   </Alert>
                 )}
               </Form.Group>
@@ -572,40 +711,135 @@ export const InteractCard = ({ client }: InterfaceProps) => {
                       ) : (
                         <p>No parameters for this function.</p>
                       )}
+                      <Form.Check
+                        type="switch"
+                        id="use-authwit-switch"
+                        label={
+                          <OverlayTrigger
+                            placement="top"
+                            overlay={<Tooltip>Send will include the selected AuthWitness.</Tooltip>}
+                          >
+                            <span>Use AuthWitness</span>
+                          </OverlayTrigger>
+                        }
+                        checked={useAuthwit}
+                        onChange={(e) => setUseAuthwit(e.target.checked)}
+                        className="mt-3 mb-2"
+                      />
+
+                      {useAuthwit && (
+                        <Form.Group className="mb-3">
+                          <Form.Label>Select AuthWitness Alias</Form.Label>
+                            <OverlayTrigger placement="top" overlay={<Tooltip>Reload</Tooltip>}>
+                              <span style={{ cursor: 'pointer', marginLeft: '3px' }} onClick={loadSavedAuthwitAliases}>
+                                <ArrowRepeat />
+                              </span>
+                            </OverlayTrigger>
+                          <Form.Control
+                            as="select"
+                            value={selectedAlias}
+                            onChange={(e) => setSelectedAlias(e.target.value)}
+                            disabled={savedAliases.length === 0}
+                          >
+                            <option value="">-- Select an alias --</option>
+                            {savedAliases.map((alias) => (
+                              <option key={alias} value={alias}>
+                                {alias}
+                              </option>
+                            ))}
+                          </Form.Control>
+                          {savedAliases.length === 0 && (
+                            <div className="text-muted mt-1" style={{ fontSize: '12px' }}>
+                              No saved AuthWitness files. Create one first.
+                            </div>
+                          )}
+                        </Form.Group>
+                      )}
                       {/* Simulate and Send Buttons */}
-                      <div className="d-flex gap-4 mt-3">
+                      <div className="d-flex mt-3 flex-wrap w-100">
                         <Button
-                          variant="secondary"
-                          size='sm'
+                          variant="primary"
+                          size="sm"
                           onClick={() => handleFunctionCall('simulate')}
                           disabled={isSimulating}
-                          style={{marginRight: "10px"}}
+                          className="flex-grow-1 me-2"
+                          style={{ marginRight: '5px' }}
                         >
                           {isSimulating ? 'Loading...' : 'Simulate'}
                         </Button>
+
                         <Button
                           variant="primary"
-                          size='sm'
+                          size="sm"
                           onClick={() => handleFunctionCall('send')}
                           disabled={isSending || selectedFunctionAbi?.custom_attributes?.includes('view')}
+                          className="flex-grow-1 me-2"
+                          style={{ marginRight: '5px' }}
                         >
                           {isSending ? 'Loading...' : 'Send'}
                         </Button>
+
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setShowAuthwitForm(prev => !prev)}
+                          className="flex-grow-1"
+                          
+                        >
+                          AuthWit
+                        </Button>
                       </div>
+                      {showAuthwitForm && (
+                          <div className="mt-3 p-3 border rounded bg-light">
+                            <Form.Group className="mb-2">
+                              <Form.Label>Caller Address (Aztec Address)</Form.Label>
+                              <Form.Control
+                                type="text"
+                                placeholder="Enter caller address"
+                                value={caller}
+                                onChange={(e) => setCaller(e.target.value)}
+                              />
+                            </Form.Group>
+
+                            <Form.Group className="mb-2">
+                              <Form.Label>Alias</Form.Label>
+                              <Form.Control
+                                type="text"
+                                placeholder="Enter alias for this AuthWitness"
+                                value={alias}
+                                onChange={(e) => setAlias(e.target.value)}
+                              />
+                            </Form.Group>
+
+                            <Button
+                              variant="warning"
+                              size="sm"
+                              disabled={!caller || !alias || creatingAuthwit}
+                              onClick={handleCreateAuthwit}
+                            >
+                              Create
+                            </Button>
+                          </div>
+                        )}
                     </div>
                   )}
                 </>
               )}
 
               {callError && (
-                <Alert variant="danger" className="mt-2 d-flex justify-content-between align-items-center" style={{
-                  fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                <Alert variant="danger" className="mt-2" style={{
+                  fontFamily: 'Menlo, Monaco, Consolas, "Courier New", monospace',
                   fontSize: '12px',
+                  whiteSpace: 'pre-wrap', 
+                  wordBreak: 'break-word', 
+                  overflowWrap: 'anywhere', 
                 }}>
-                  <span>{callError}</span>
-                  <Button variant="link" onClick={handleCloseCallError} className="p-0">
-                    <X size={20} />
-                  </Button>
+                  <div className="d-flex justify-content-between align-items-start w-100">
+                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{callError}</div>
+                    <Button variant="link" onClick={handleCloseCallError} className="p-0 ms-2">
+                      <X size={20} />
+                    </Button>
+                  </div>
                 </Alert>
               )}
             </Form>
