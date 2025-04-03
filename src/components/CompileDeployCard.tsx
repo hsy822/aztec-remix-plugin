@@ -11,6 +11,10 @@ import {
   Contract,
 } from '@aztec/aztec.js';
 import { encodeArguments, getDefaultInitializer, getInitializer, getAllFunctionAbis } from '@aztec/stdlib/abi';
+import { ImportExampleSelector } from './compile/ImportExampleSelector';
+import { TargetProjectSelector } from './compile/TargetProjectSelector';
+import { CompileStatusPanel } from './compile/CompileStatusPanel';
+import { DeploySection } from './deploy/DeploySection';
 
 interface Parameter {
   name: string;
@@ -457,66 +461,20 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
         <div id="compile-collapse" style={{ transition: 'height 0.3s ease-in-out', overflow: 'hidden' }}>
           <Card.Body>
             <Form>
-              {/* Compile Section */}
-              <Form.Group>
-                <Form.Text className="text-muted">
-                  <small>IMPORT EXAMPLE PROJECT</small>
-                </Form.Text>
-                <InputGroup className="mt-2">
-                  <Form.Control
-                    className="custom-select"
-                    as="select"
-                    value={exampleToImport}
-                    onChange={(e) => setExampleToImport(e.target.value)}
-                  >
-                    <option value="">-- Select Example --</option>
-                    {examples.map((exampleName) => (
-                      <option key={exampleName} value={exampleName}>
-                        {exampleName}
-                      </option>
-                    ))}
-                  </Form.Control>
-                </InputGroup>
-                <Button
-                  className="w-100 mt-2"
-                  variant="secondary"
-                  disabled={!exampleToImport}
-                  onClick={() => importExample(exampleToImport)}
-                >
-                  Import Selected Example
-                </Button>
-              </Form.Group>
+              <ImportExampleSelector
+                examples={examples}
+                exampleToImport={exampleToImport}
+                setExampleToImport={setExampleToImport}
+                importExample={importExample}
+              />
 
-              <Form.Group className="mt-3" style={{marginTop: "10px"}}>
-                <Form.Text className="text-muted">
-                  <small>TARGET PROJECT </small>
-                  <OverlayTrigger placement="top" overlay={<Tooltip>Reload</Tooltip>}>
-                    <span style={{ cursor: 'pointer' }} onClick={getList}>
-                      <ArrowRepeat />
-                    </span>
-                  </OverlayTrigger>
-                </Form.Text>
-                <InputGroup className="mt-2">
-                  <OverlayTrigger
-                    placement="top"
-                    overlay={<Tooltip>The project must be located under the `aztec` folder in the root directory.</Tooltip>}
-                  >
-                    <Form.Control
-                      className="custom-select"
-                      as="select"
-                      value={targetProject}
-                      onChange={setTarget}
-                    >
-                      <option value="">-- Select Project --</option>
-                      {projectList.map((projectName, idx) => (
-                        <option value={projectName} key={idx}>
-                          {projectName}
-                        </option>
-                      ))}
-                    </Form.Control>
-                  </OverlayTrigger>
-                </InputGroup>
-              </Form.Group>
+              <TargetProjectSelector
+                projectList={projectList}
+                targetProject={targetProject}
+                setTarget={setTarget}
+                onReload={getList}
+              />
+
               <Button
                 variant="primary"
                 className="w-100 mt-3"
@@ -531,23 +489,13 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
                   'Compile'
                 )}
               </Button>
-              {loading && (
-                <div className="mt-3" style={{marginTop: "10px"}}>
-                  <div className="d-flex align-items-center justify-content-between">
-                    <Button size="sm" variant="outline-primary" onClick={checkQueueStatus}>
-                      Check Compile Order
-                    </Button>
-                  </div>
-                  {queuePosition !== null && (
-                    <Alert variant="info" className="mt-2" style={{
-                      fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                      fontSize: '12px',
-                    }}>
-                      You're currently <strong>#{queuePosition + 1}</strong> in the queue.<br />
-                    </Alert>
-                  )}
-                </div>
-              )}
+              
+              <CompileStatusPanel
+                loading={loading}
+                queuePosition={queuePosition}
+                checkQueueStatus={checkQueueStatus}
+              />
+
               {/* Info Message when no artifacts */}
               {!canDeploy && targetProject && (
                 <Alert variant="info" className="mt-2" style={{
@@ -567,73 +515,20 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
               )}
               {/* Deploy Section */}
               {canDeploy && jsonFiles.length > 0 && (
-                <>
-                  <Form.Group className="mt-4">
-                    <Form.Text className="text-muted">
-                      <small>DEPLOY CONTRACT</small>
-                    </Form.Text>
-                    <Form.Label>Select Artifact</Form.Label>
-                    <InputGroup className="mt-2">
-                      <Form.Control
-                        className="custom-select"
-                        as="select"
-                        value={selectedContract}
-                        onChange={(e) => setSelectedContract(e.target.value)}
-                      >
-                        {jsonFiles.map((file, idx) => (
-                          <option key={idx} value={file}>
-                            {file.split('/').slice(-2).join('/')} {/* e.g., target/contract.json */}
-                          </option>
-                        ))}
-                      </Form.Control>
-                    </InputGroup>
-                    {parameters.map((param) => (
-                      <div key={param.name}>
-                        <Form.Label className="mt-2">{param.name}</Form.Label>
-                        <Form.Control
-                          type={param.type === 'integer' ? 'number' : 'text'}
-                          placeholder={`Enter ${param.name}`}
-                          value={paramValues[param.name] || ''}
-                          onChange={(e) => handleParamChange(param.name, e.target.value)}
-                          className="mt-2"
-                        />
-                      </div>
-                    ))}
-                  </Form.Group>
-                  <Button
-                    variant="success"
-                    className="w-100 mt-3"
-                    disabled={!wallet || deploying || !targetProject || !selectedContract}
-                    onClick={handleDeploy}
-                  >
-                    {deploying ? (
-                      <>
-                        <Spinner animation="border" size="sm" /> Deploying...
-                      </>
-                    ) : (
-                      'Deploy'
-                    )}
-                  </Button>
-  
-                  {/* Deploy Result */}
-                  {deployResult && (
-                    <Alert variant="success" className="mt-2" 
-                      style={{
-                        fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                        fontSize: '12px',
-                    }}>
-                      {deployResult}
-                    </Alert>
-                  )}
-                  {deployError && (
-                    <Alert variant="danger" className="mt-2" style={{
-                      fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                      fontSize: '12px',
-                    }}>
-                      {deployError}
-                    </Alert>
-                  )}
-                </>
+                <DeploySection
+                  jsonFiles={jsonFiles}
+                  selectedContract={selectedContract}
+                  setSelectedContract={setSelectedContract}
+                  parameters={parameters}
+                  paramValues={paramValues}
+                  handleParamChange={handleParamChange}
+                  handleDeploy={handleDeploy}
+                  deploying={deploying}
+                  wallet={wallet}
+                  targetProject={targetProject}
+                  deployResult={deployResult}
+                  deployError={deployError}
+                />
               )}
             </Form>
           </Card.Body>

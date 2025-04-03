@@ -9,6 +9,14 @@ import { Contract, AztecAddress, loadContractArtifact, AuthWitness, SentTx } fro
 import { FileUtil } from '../utils/fileutils';
 import { getAllFunctionAbis } from '@aztec/stdlib/abi';
 import { copyToClipboard } from '../utils/clipboard';
+import { ContractInstanceSelector } from './interact/ContractInstanceSelector';
+import { AtAddressInput } from './interact/AtAddressInput';
+import { FunctionFilter } from './interact/FunctionFilter';
+import { FunctionSelector } from './interact/FunctionSelector';
+import { FunctionParametersForm } from './interact/FunctionParametersForm';
+import { AuthWitnessSelector } from './interact/AuthWitnessSelector';
+import { ActionButtons } from './interact/ActionButtons';
+import { AuthwitCreationForm } from './interact/AuthwitCreationForm';
 
 interface ContractInstance {
   address: AztecAddress;
@@ -135,8 +143,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
     });
   };
 
-  const handleInstanceChange = (e: React.ChangeEvent<any>) => {
-    const address = e.target.value;
+  const handleInstanceChange = (address: string) => {
     const instance = contractInstances.find((inst) => inst.address.toString() === address);
     setSelectedInstance(instance || null);
     console.log('InteractCard - Selected instance:', instance ? instance.address.toString() : null);
@@ -208,8 +215,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
   };
   
 
-  const handleFunctionChange = async (e: React.ChangeEvent<any>) => {
-    const fnName = e.target.value;
+  const handleFunctionChange = async (fnName: string) => {
     setSelectedFunction(fnName);
     await loadSavedAuthwitAliases();
   };
@@ -493,336 +499,74 @@ export const InteractCard = ({ client }: InterfaceProps) => {
           <Card.Body>
             <Form>
               {/* Contract Instances */}
-              <Form.Group>
-                <Form.Label>Contract Instances</Form.Label>
-                <InputGroup className="mt-2">
-                  <Form.Control
-                    className="custom-select"
-                    as="select"
-                    value={selectedInstance?.address.toString() || ''}
-                    onChange={handleInstanceChange}
-                    disabled={contractInstances.length === 0}
-                  >
-                    {contractInstances.length === 0 ? (
-                      <option value="">No instances available</option>
-                    ) : (
-                      contractInstances.map((inst) => (
-                        <option key={inst.address.toString()} value={inst.address.toString()}>
-                          {shortenAddress(inst.address.toString())}
-                        </option>
-                      ))
-                    )}
-                  </Form.Control>
-                  {selectedInstance && (
-                    <>
-                      <span style={{ width: '5px', display: 'inline-block' }}></span>
-                      <OverlayTrigger placement="top" overlay={<Tooltip>Copy Address</Tooltip>}>
-                        <span style={{ cursor: 'pointer' }} onClick={() => copyToClipboard(selectedInstance.address.toString())}>
-                          <Clipboard />
-                        </span>
-                      </OverlayTrigger>
-                      <span style={{ width: '5px', display: 'inline-block' }}></span>
-                      <OverlayTrigger placement="top" overlay={<Tooltip>Delete</Tooltip>}>
-                        <span style={{ cursor: 'pointer' }} onClick={() => handleDeleteInstance(selectedInstance.address.toString())}>
-                          <Trash />
-                        </span>
-                      </OverlayTrigger>
-                    </>
-                  )}
-                </InputGroup>
-              </Form.Group>
+              <ContractInstanceSelector
+                contractInstances={contractInstances}
+                selectedInstance={selectedInstance}
+                onSelect={handleInstanceChange}
+                onDelete={handleDeleteInstance}
+              />
 
               {/* At Address */}
-              <Form.Group className="mt-3" style={{marginTop: "10px"}}>
-                <Form.Label>At Address</Form.Label>
-                <InputGroup>
-                  <OverlayTrigger
-                    placement="top"
-                    overlay={
-                      <Tooltip className="text-start">
-                        Make sure you've placed a compiled .json artifact directly under the aztec/ folder. This will be used to connect to the contract at the address you enter.
-                      </Tooltip>
-                    }
-                  >
-                    <Button variant="primary" size="sm" className="px-3" onClick={handleAtAddress}>
-                      At Address
-                    </Button>
-                  </OverlayTrigger>
-                  <OverlayTrigger
-                    placement="top"
-                    overlay={<Tooltip>Address of Contract</Tooltip>}
-                  >
-                    <Form.Control
-                      type="text"
-                      placeholder="contract address"
-                      value={atAddressInput}
-                      onChange={(e) => {
-                        setAtAddressInput(e.target.value);
-                      }}
-                    />
-                  </OverlayTrigger>
-                </InputGroup>
-                {atAddressError && (
-                  <Alert
-                    variant="danger"
-                    className="mt-2"
-                    style={{
-                      fontFamily: 'Menlo, Monaco, Consolas, "Courier New", monospace',
-                      fontSize: '12px',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'anywhere',
-                    }}
-                  >
-                    <div className="d-flex justify-content-between align-items-start w-100">
-                      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {atAddressError}
-                      </div>
-                      <Button
-                        variant="link"
-                        onClick={handleCloseAtAddressError}
-                        className="p-0 ms-2"
-                        style={{ lineHeight: 1 }}
-                      >
-                        <X size={20} />
-                      </Button>
-                    </div>
-                  </Alert>
-                )}
-              </Form.Group>
+              <AtAddressInput
+                atAddressInput={atAddressInput}
+                atAddressError={atAddressError}
+                onChange={setAtAddressInput}
+                onSubmit={handleAtAddress}
+                onCloseError={handleCloseAtAddressError}
+              />
 
               {/* Function Filters */}
               {selectedInstance && (
                 <>
-                  <Form.Group className="mt-3"  style={{marginTop: "10px"}}>
-                    <Form.Label>Filter Functions</Form.Label>
-                    <InputGroup className="mb-2">
-                      <Form.Control
-                        type="text"
-                        placeholder="Search function"
-                        value={filters.searchTerm}
-                        onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-                      />
-                    </InputGroup>
-                    <div className="d-flex">
-                      <div className="custom-control custom-checkbox me-3 mr-2">
-                        <input
-                          type="checkbox"
-                          className="custom-control-input"
-                          id="filterPrivate"
-                          checked={filters.private}
-                          onChange={(e) => handleFilterChange('private', e.target.checked)}
-                        />
-                        <label className="custom-control-label" htmlFor="filterPrivate">Private</label>
-                      </div>
-                      <div className="custom-control custom-checkbox me-3 mr-2">
-                        <input
-                          type="checkbox"
-                          className="custom-control-input"
-                          id="filterPublic"
-                          checked={filters.public}
-                          onChange={(e) => handleFilterChange('public', e.target.checked)}
-                        />
-                        <label className="custom-control-label" htmlFor="filterPublic">Public</label>
-                      </div>
-                      <div className="custom-control custom-checkbox">
-                        <input
-                          type="checkbox"
-                          className="custom-control-input"
-                          id="filterUnconstrained"
-                          checked={filters.unconstrained}
-                          onChange={(e) => handleFilterChange('unconstrained', e.target.checked)}
-                        />
-                        <label className="custom-control-label" htmlFor="filterUnconstrained">Unconstrained</label>
-                      </div>
-                    </div>
-                  </Form.Group>
+                  <FunctionFilter
+                    filters={filters}
+                    onFilterChange={handleFilterChange}
+                  />
 
-                  {/* Function Selection */}
-                  {filteredFunctions.length > 0 ? (
-                    <Form.Group className="mt-3"  style={{marginTop: "10px"}}>
-                      <Form.Label>Select Function</Form.Label>
-                      <InputGroup className="mt-2">
-                      <Form.Control
-                        className="custom-select"
-                        as="select"
-                        value={selectedFunction || ''}
-                        onChange={handleFunctionChange}
-                      >
-                        <option value="">Select a function</option>
-                        {filteredFunctions.map((fn) => {
-                          const functionType = fn.custom_attributes?.includes('private')
-                            ? 'private'
-                            : fn.custom_attributes?.includes('public')
-                            ? 'public'
-                            : 'public';
-                          const isUnconstrained = fn.is_unconstrained === true;
-                          const additionalTags = fn.custom_attributes
-                            ?.filter((tag: string) => !['private', 'public'].includes(tag))
-                            .join(', ');
-                          const displayTags = [
-                            functionType,
-                            isUnconstrained ? 'unconstrained' : '',
-                            additionalTags,
-                          ]
-                            .filter(Boolean)
-                            .join(', ');
-                          return (
-                            <option key={fn.name} value={fn.name}>
-                              {fn.name} ({displayTags})
-                            </option>
-                          );
-                        })}
-                      </Form.Control>
-                    </InputGroup>
-                    </Form.Group>
-                  ) : (
-                    selectedInstance && (
-                      <Alert variant="info" className="mt-3" style={{
-                        fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                        fontSize: '12px',
-                      }}>
-                        No functions available to display. Check the contract ABI or adjust the filters.
-                      </Alert>
-                    )
-                  )}
+                  <FunctionSelector
+                    filteredFunctions={filteredFunctions}
+                    selectedFunction={selectedFunction}
+                    onChange={handleFunctionChange}
+                  />
 
-                  {/* Function Parameters */}
                   {selectedFunction && selectedFunctionAbi && (
-                    <div className="mt-3">
-                      {selectedFunctionAbi.abi.parameters &&
-                      selectedFunctionAbi.abi.parameters.length > 0 ? (
-                        selectedFunctionAbi.abi.parameters
-                          .filter((param: any, index: number) => {
-                            const isPrivate = selectedFunctionAbi.custom_attributes?.includes('private');
-                            const isFirst = index === 0;
-                            return !(isPrivate && isFirst && param.name === 'inputs');
-                          })
-                          .map((param: any) => (
-                            <Form.Group key={param.name} className="mb-2" style={{ marginTop: '10px' }}>
-                              <Form.Label>{param.name}</Form.Label>
-                              <Form.Control
-                                type={param.type.kind === 'integer' ? 'number' : 'text'}
-                                placeholder={`Enter ${param.name}`}
-                                value={callParams[selectedFunction]?.[param.name] || ''}
-                                onChange={(e) => handleParameterChange(selectedFunction, param.name, e.target.value)}
-                              />
-                            </Form.Group>
-                          ))
-                      ) : (
-                        <p>No parameters for this function.</p>
-                      )}
-                      <Form.Check
-                        type="switch"
-                        id="use-authwit-switch"
-                        label={
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={<Tooltip>Send will include the selected AuthWitness.</Tooltip>}
-                          >
-                            <span>Use AuthWitness</span>
-                          </OverlayTrigger>
-                        }
-                        checked={useAuthwit}
-                        onChange={(e) => setUseAuthwit(e.target.checked)}
-                        className="mt-3 mb-2"
+                    <>
+                      <FunctionParametersForm
+                        fnAbi={selectedFunctionAbi}
+                        fnName={selectedFunction}
+                        callParams={callParams}
+                        onParamChange={handleParameterChange}
                       />
 
-                      {useAuthwit && (
-                        <Form.Group className="mb-3">
-                          <Form.Label>Select AuthWitness Alias</Form.Label>
-                            <OverlayTrigger placement="top" overlay={<Tooltip>Reload</Tooltip>}>
-                              <span style={{ cursor: 'pointer', marginLeft: '3px' }} onClick={loadSavedAuthwitAliases}>
-                                <ArrowRepeat />
-                              </span>
-                            </OverlayTrigger>
-                          <Form.Control
-                            as="select"
-                            value={selectedAlias}
-                            onChange={(e) => setSelectedAlias(e.target.value)}
-                            disabled={savedAliases.length === 0}
-                          >
-                            <option value="">-- Select an alias --</option>
-                            {savedAliases.map((alias) => (
-                              <option key={alias} value={alias}>
-                                {alias}
-                              </option>
-                            ))}
-                          </Form.Control>
-                          {savedAliases.length === 0 && (
-                            <div className="text-muted mt-1" style={{ fontSize: '12px' }}>
-                              No saved AuthWitness files. Create one first.
-                            </div>
-                          )}
-                        </Form.Group>
-                      )}
-                      {/* Simulate and Send Buttons */}
-                      <div className="d-flex mt-3 flex-wrap w-100">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleFunctionCall('simulate')}
-                          disabled={isSimulating}
-                          className="flex-grow-1 me-2"
-                          style={{ marginRight: '5px' }}
-                        >
-                          Simulate
-                        </Button>
+                      <AuthWitnessSelector
+                        useAuthwit={useAuthwit}
+                        onToggle={setUseAuthwit}
+                        selectedAlias={selectedAlias}
+                        savedAliases={savedAliases}
+                        onAliasChange={setSelectedAlias}
+                        onReload={loadSavedAuthwitAliases}
+                      />
 
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleFunctionCall('send')}
-                          disabled={isSending || selectedFunctionAbi?.custom_attributes?.includes('view')}
-                          className="flex-grow-1 me-2"
-                          style={{ marginRight: '5px' }}
-                        >
-                          Send
-                        </Button>
+                      <ActionButtons
+                        isSimulating={isSimulating}
+                        isSending={isSending}
+                        selectedFunctionAbi={selectedFunctionAbi}
+                        onSimulate={() => handleFunctionCall('simulate')}
+                        onSend={() => handleFunctionCall('send')}
+                        onToggleAuthwit={() => setShowAuthwitForm(prev => !prev)}
+                      />
 
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setShowAuthwitForm(prev => !prev)}
-                          className="flex-grow-1"
-                          
-                        >
-                          AuthWit
-                        </Button>
-                      </div>
                       {showAuthwitForm && (
-                          <div className="mt-3 p-3 border rounded bg-light">
-                            <Form.Group className="mb-2">
-                              <Form.Label>Caller Address (Aztec Address)</Form.Label>
-                              <Form.Control
-                                type="text"
-                                placeholder="Enter caller address"
-                                value={caller}
-                                onChange={(e) => setCaller(e.target.value)}
-                              />
-                            </Form.Group>
-
-                            <Form.Group className="mb-2">
-                              <Form.Label>Alias</Form.Label>
-                              <Form.Control
-                                type="text"
-                                placeholder="Enter alias for this AuthWitness"
-                                value={alias}
-                                onChange={(e) => setAlias(e.target.value)}
-                              />
-                            </Form.Group>
-
-                            <Button
-                              variant="warning"
-                              size="sm"
-                              disabled={!caller || !alias || creatingAuthwit}
-                              onClick={handleCreateAuthwit}
-                            >
-                              Create
-                            </Button>
-                          </div>
-                        )}
-                    </div>
+                        <AuthwitCreationForm
+                          caller={caller}
+                          alias={alias}
+                          creating={creatingAuthwit}
+                          onChangeCaller={setCaller}
+                          onChangeAlias={setAlias}
+                          onCreate={handleCreateAuthwit}
+                        />
+                      )}
+                    </>
                   )}
                 </>
               )}
