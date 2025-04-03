@@ -442,6 +442,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
         );
   
         await client.fileManager.writeFile(`${proofDir}/${fileName}`, meta);
+        await loadSavedAuthwitAliases(); 
       } else {
         const witness = await wallet.createAuthWit({
           caller: AztecAddress.fromString(caller),
