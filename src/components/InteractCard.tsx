@@ -317,14 +317,14 @@ export const InteractCard = ({ client }: InterfaceProps) => {
           const parsed = JSON.parse(witnessJson)
           
           if (selectedFunctionAbi?.custom_attributes?.includes('public')) {
-            tx = await currentContract.methods[selectedFunction](...params).send();
+            tx = await currentContract.withWallet(wallet).methods[selectedFunction](...params).send();
           } else {
-            tx = await currentContract.methods[selectedFunction](...params).send({
+            tx = await currentContract.withWallet(wallet).methods[selectedFunction](...params).send({
               authWitnesses: [parsed.witness],
             });
           }
         } else {
-          tx = await currentContract.methods[selectedFunction](...params).send();
+          tx = await currentContract.withWallet(wallet).methods[selectedFunction](...params).send();
         }
         const receipt = await tx.wait();
         await client.terminal.log({ type: 'info', value: `Transaction successful:\n${serializeBigInt(receipt)}` });
@@ -397,7 +397,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
           return converted;
         });
   
-      const action = currentContract.methods[selectedFunction](...params);
+      const action = currentContract.withWallet(wallet).methods[selectedFunction](...params);
   
       if (!caller || !alias) {
         throw new Error('Caller and alias are required.');
@@ -765,7 +765,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
                           className="flex-grow-1 me-2"
                           style={{ marginRight: '5px' }}
                         >
-                          {isSimulating ? 'Loading...' : 'Simulate'}
+                          Simulate
                         </Button>
 
                         <Button
@@ -776,7 +776,7 @@ export const InteractCard = ({ client }: InterfaceProps) => {
                           className="flex-grow-1 me-2"
                           style={{ marginRight: '5px' }}
                         >
-                          {isSending ? 'Loading...' : 'Send'}
+                          Send
                         </Button>
 
                         <Button

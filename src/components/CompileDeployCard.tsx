@@ -358,7 +358,7 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
       .send().deployed()
       
       const contractAddress = deployed.instance.address;
-      setCurrentContract(deployed);
+      setCurrentContract(deployed.withWallet(wallet));
       setCurrentContractAddress(contractAddress);
       setDeployResult(`✅ Contract deployed at address: ${contractAddress}`);
       await client.terminal.log({ type: 'info', value: `✅ Contract deployed at ${contractAddress}` });
