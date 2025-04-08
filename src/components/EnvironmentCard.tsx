@@ -101,7 +101,7 @@ export const EnvironmentCard = ({ client }: InterfaceProps) => {
               </a>
             </p>
             <p style={{ fontSize: '0.8rem' }}>
-              🛠️ Using compiler version <strong>0.82.3</strong>
+              🛠️ Using compiler version <strong>0.84.0</strong>
             </p>
             <Button
               variant={pxe ? 'success' : 'primary'}
