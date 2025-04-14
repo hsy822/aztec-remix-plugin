@@ -100,6 +100,24 @@ export const CompileDeployCard = ({ client }: InterfaceProps) => {
     return `req_${timestamp}_${rand}`;
   };
 
+  useEffect(() => {
+    if (!client) return;
+  
+    const reload = async () => {
+      console.log('[plugin] FS changed, reloading...');
+      await getList();
+    };
+  
+    client.on('fileManager', 'fileAdded', reload);
+    client.on('fileManager', 'fileRenamed', reload);
+  
+    return () => {
+      client.off('fileManager', 'fileAdded');
+      client.off('fileManager', 'fileRenamed');
+    };
+  }, [client]);
+  
+  
   const getList = async () => {
     const projects = await getProjectHaveTomlFile('browser/aztec');
     setProjectList(projects);
