@@ -55,7 +55,7 @@ export const EnvironmentCard = ({ client }: InterfaceProps) => {
         address: wallet.getAddress().toString(),
         walletInstance: wallet,
       }));
-  
+      
       setAccounts(accountWallets);
       setSelectedAddress(accountWallets[0].address);
       setWallet(accountWallets[0].walletInstance);
@@ -69,7 +69,7 @@ export const EnvironmentCard = ({ client }: InterfaceProps) => {
     }
   };
   
-
+  
   const handleAccountChange = (e: React.ChangeEvent<any>) => {
     const selectedAddress = (e.target as HTMLSelectElement).value;
     setSelectedAddress(selectedAddress);
@@ -101,7 +101,7 @@ export const EnvironmentCard = ({ client }: InterfaceProps) => {
               </a>
             </p>
             <p style={{ fontSize: '0.8rem' }}>
-              🛠️ Using compiler version <strong>0.84.0</strong>
+              🛠️ Using compiler version <strong>0.85.0</strong>
             </p>
             <Button
               variant={pxe ? 'success' : 'primary'}
